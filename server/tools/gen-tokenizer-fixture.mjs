@@ -13,8 +13,10 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Tokenizer } from '@huggingface/tokenizers';
 
-const REF_DIR = 'D:/laya/reference/en';
-const OUT = 'D:/laya/app/app/src/test/resources/tokenizer-fixture.json';
+import { EN_DIR as REF_DIR, requireTokenizer } from './paths.mjs';
+
+requireTokenizer();
+const OUT = path.join(repoRoot, 'app/app/src/test/resources/tokenizer-fixture.json');
 
 const tokJson = JSON.parse(await readFile(path.join(REF_DIR, 'tokenizer.json'), 'utf8'));
 const tokCfg = JSON.parse(await readFile(path.join(REF_DIR, 'tokenizer_config.json'), 'utf8'));

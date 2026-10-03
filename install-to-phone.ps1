@@ -17,16 +17,38 @@ param(
     [switch]$DebugBuild,
     [switch]$WithModel,
     [string]$Adb = 'C:\Android\platform-tools\adb.exe',
-    [string]$Model = 'D:\laya\reference\models\model_int4.onnx',
-    [string]$ApkRoot = 'D:\laya\app\app\build\outputs\apk'
+    [string]$Model = '',
+    [string]$ApkRoot = ''
 )
 
 $ErrorActionPreference = 'Continue'
 $Package = 'com.laya.decide'
 
+$script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ($ApkRoot -eq '') { $ApkRoot = Join-Path $script:Root 'app\app\build\outputs\apk' }
+
 function Fail($m) { Write-Host ''; Write-Host ('  x ' + $m) -ForegroundColor Red; exit 1 }
 function Info($m) { Write-Host $m }
 function Ok($m)   { Write-Host ('  OK ' + $m) -ForegroundColor Green }
+
+# 模型不在仓库里（262MB，不适合进 git）。按优先级在常见位置找，
+# 都没有就提示先跑 fetch-model.ps1。
+function Find-Model {
+    $fileName = 'model_int4.onnx'
+    $cands = @()
+    if ($Model -ne '') { $cands += $Model }
+    $cands += @(
+        (Join-Path $script:Root "reference\models\$fileName"),
+        (Join-Path $script:Root "models\$fileName"),
+        (Join-Path $script:Root "reference\$fileName"),
+        (Join-Path $script:Root $fileName),
+        (Join-Path (Split-Path -Parent $script:Root) $fileName)
+    )
+    foreach ($c in $cands) {
+        if ((Test-Path $c) -and ((Get-Item $c).Length -gt 250MB)) { return (Resolve-Path $c).Path }
+    }
+    return $null
+}
 
 if (-not (Test-Path $Adb)) { Fail ('找不到 adb: ' + $Adb) }
 
@@ -79,7 +101,7 @@ if ($abis -notmatch 'arm64-v8a') {
 $flavor = if ($DebugBuild) { 'debug' } else { 'release' }
 $apk = Join-Path $ApkRoot "$flavor\app-$variant-$flavor.apk"
 if (-not (Test-Path $apk)) {
-    Fail ("找不到安装包: $apk`n  先编译：D:\laya\build.ps1")
+    Fail ("找不到安装包: $apk`n  先编译： " + (Join-Path $script:Root 'build.ps1'))
 }
 
 Info ''
@@ -97,12 +119,23 @@ Ok '安装完成'
 # --- 3. 可选：传模型 -----------------------------------------------------
 
 if ($WithModel) {
-    if (-not (Test-Path $Model)) { Fail ('找不到模型: ' + $Model) }
-    $sizeMb = [math]::Round((Get-Item $Model).Length / 1MB, 1)
+    $modelPath = Find-Model
+    if (-not $modelPath) {
+        Info ''
+        Info '  ! 加了 -WithModel，但找不到 model_int4.onnx。'
+        Info '    先跑一次下载脚本：'
+        Info ('        ' + (Join-Path $script:Root 'fetch-model.ps1'))
+        Info '    或用 -Model 指定位置。'
+        Info '    （App 仍已装好，可以稍后在 App 内点「下载模型」）'
+        Info ''
+        exit 1
+    }
+    $sizeMb = [math]::Round((Get-Item $modelPath).Length / 1MB, 1)
     $remote = '/data/local/tmp/laya-model.onnx'
     Info ''
     Info ("  > 传输模型 ($sizeMb MB) ...")
-    $push = & $Adb -s $serial push $Model $remote 2>&1 | Out-String
+    Info ('    来源: ' + $modelPath)
+    $push = & $Adb -s $serial push $modelPath $remote 2>&1 | Out-String
     if ($push -notmatch '1 file pushed') { Fail ('推送失败: ' + $push) }
     $remoteSize = ((& $Adb -s $serial shell "stat -c %s $remote 2>/dev/null" 2>&1 | Out-String) -replace '\D', '')
     $localSize = (Get-Item $Model).Length

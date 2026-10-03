@@ -11,8 +11,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Tokenizer } from '@huggingface/tokenizers';
 
-const REF = 'D:/laya/reference/en';
-const MODEL = 'D:/laya/reference/models/model_int4.onnx';
+import { EN_DIR as REF, requireModel, requireTokenizer } from './paths.mjs';
+
+requireTokenizer();
+const MODEL = requireModel();
 
 const tokJson = JSON.parse(await readFile(path.join(REF, 'tokenizer.json'), 'utf8'));
 const tokCfg = JSON.parse(await readFile(path.join(REF, 'tokenizer_config.json'), 'utf8'));

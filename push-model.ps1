@@ -2,6 +2,7 @@
 #
 #   .\push-model.ps1
 #   .\push-model.ps1 -Serial emulator-5554
+#   .\push-model.ps1 -Model D:\其他位置\model_int4.onnx
 #
 # 推到 /data/local/tmp/laya-model.onnx。
 #
@@ -10,8 +11,9 @@
 # /data/local/tmp 是唯一同时满足「shell 可写」且「应用可读」的位置，
 # App 会把它作为候选路径之一。
 #
-# ⚠️ 本文件必须保存为 UTF-8 带 BOM。Windows PowerShell 5.1 读无 BOM 的 .ps1
-#    会按 ANSI/GBK 解码，中文变乱码、引号错位，报出一堆假的语法错。
+# 找不到模型时会自动在常见位置搜索；都没有就提示先跑 fetch-model.ps1。
+#
+# ⚠️ 本文件必须保存为 UTF-8 带 BOM（Windows PowerShell 5.1 的要求）。
 #
 # 注意：adb 会把正常进度写到 stderr，PowerShell 的 $ErrorActionPreference='Stop'
 # 会把它当致命错误。所以 adb 调用统一走 Adb 函数，只看 stdout。
@@ -20,7 +22,7 @@
 param(
     [string]$Serial = '',
     [string]$Adb = 'C:\Android\platform-tools\adb.exe',
-    [string]$Model = 'D:\laya\reference\models\model_int4.onnx'
+    [string]$Model = ''
 )
 
 $ErrorActionPreference = 'Continue'
@@ -29,7 +31,42 @@ function Fail($m) { Write-Host ('  x ' + $m) -ForegroundColor Red; exit 1 }
 function Info($m) { Write-Host $m }
 
 if (-not (Test-Path $Adb)) { Fail ('找不到 adb: ' + $Adb) }
-if (-not (Test-Path $Model)) { Fail ('找不到模型: ' + $Model) }
+
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$fileName = 'model_int4.onnx'
+
+# 按优先级找模型：显式指定 > 本仓库常见位置 > 上层目录
+function Find-Model {
+    $cands = @()
+    if ($Model -ne '') { $cands += $Model }
+    $cands += @(
+        (Join-Path $root "reference\models\$fileName"),
+        (Join-Path $root "models\$fileName"),
+        (Join-Path $root "reference\$fileName"),
+        (Join-Path $root $fileName),
+        (Join-Path (Split-Path -Parent $root) $fileName)
+    )
+    foreach ($c in $cands) {
+        if ((Test-Path $c) -and ((Get-Item $c).Length -gt 250MB)) { return (Resolve-Path $c).Path }
+    }
+    return $null
+}
+
+$modelPath = Find-Model
+if (-not $modelPath) {
+    Info ''
+    Info '  找不到模型文件 model_int4.onnx（262MB 那个）。'
+    Info ''
+    Info '  先跑一次下载脚本：'
+    Info ('      ' + (Join-Path $root 'fetch-model.ps1'))
+    Info ''
+    Info '  或手动指定位置：'
+    Info ('      .\push-model.ps1 -Model "D:\你放模型的地方\' + $fileName + '"')
+    Info ''
+    Info '  下载地址（不需要账号）：'
+    Info '      https://hf-mirror.com/techtheist/laya-onnx/resolve/main/en/model_int4.onnx'
+    exit 1
+}
 
 $script:devArgs = @()
 if ($Serial -ne '') { $script:devArgs = @('-s', $Serial) }
@@ -41,9 +78,12 @@ function Adb {
 }
 
 $remote = '/data/local/tmp/laya-model.onnx'
-$localSize = (Get-Item $Model).Length
-$localMd5 = (Get-FileHash $Model -Algorithm MD5).Hash.ToLower()
+$localSize = (Get-Item $modelPath).Length
+$localMd5 = (Get-FileHash $modelPath -Algorithm MD5).Hash.ToLower()
 $sizeMb = [math]::Round($localSize / 1MB, 1)
+
+Info ''
+Info ('  > 使用模型: ' + $modelPath)
 
 # 设备上已经有一份一样的就跳过（每次 262MB 很浪费时间）
 $existingMd5 = (Adb shell "md5sum $remote 2>/dev/null")
@@ -56,7 +96,7 @@ if ($existingMd5 -match $localMd5) {
 
 Info ''
 Info ("  > 传输模型 ($sizeMb MB) ...")
-$pushOut = Adb push $Model $remote
+$pushOut = Adb push $modelPath $remote
 if ($pushOut -notmatch '1 file pushed') { Fail ('adb push 失败: ' + $pushOut) }
 
 Info '  > 校验 ...'

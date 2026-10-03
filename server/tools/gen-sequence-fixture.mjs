@@ -10,8 +10,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Tokenizer } from '@huggingface/tokenizers';
 
-const REF = 'D:/laya/reference/en';
-const OUT = 'D:/laya/app/app/src/test/resources/sequence-fixture.json';
+import { EN_DIR as REF, repoRoot, requireTokenizer } from './paths.mjs';
+
+requireTokenizer();
+const OUT = path.join(repoRoot, 'app/app/src/test/resources/sequence-fixture.json');
 
 const tokJson = JSON.parse(await readFile(path.join(REF, 'tokenizer.json'), 'utf8'));
 const tokCfg = JSON.parse(await readFile(path.join(REF, 'tokenizer_config.json'), 'utf8'));

@@ -16,11 +16,26 @@
 
 ## 一条命令搞定
 
+> **clone 之后先跑 `.\fetch-model.ps1`。** 仓库里不含模型（262MB），
+> 没有它 `push-model.ps1` / `install-to-phone.ps1 -WithModel` 都会告诉你缺文件。
+
 ```powershell
-D:\laya\build.ps1              # 编译 debug + release，并跑单测
-D:\laya\build.ps1 -Install     # 编译后自动装到已连接的设备/模拟器
-D:\laya\build.ps1 -Release     # 只出签名 release 包
+.\fetch-model.ps1              # 下载分词器 + int4 模型（约 262MB，走镜像，无需账号）
+.\build.ps1                    # 编译 debug + release，并跑单测
+.\build.ps1 -Install           # 编译后自动装到已连接的设备/模拟器
+.\build.ps1 -Release           # 只出签名 release 包
 ```
+
+**所有脚本都从自身位置解析路径，不写死盘符**，所以 clone 到任何目录都能用。
+机器相关的路径可以用环境变量覆盖，免得改脚本：
+
+| 环境变量 | 作用 | 默认 |
+|---|---|---|
+| `ANDROID_HOME` | Android SDK | `C:\Android` |
+| `LAYA_GRADLE` | Gradle 可执行文件 | 优先用工程自带 `gradlew.bat` |
+| `LAYA_ADB` | adb 路径 | `%ANDROID_HOME%\platform-tools\adb.exe` |
+| `LAYA_AVD` | 模拟器 AVD 名 | `dsh-test30` |
+| `LAYA_REF` | 模型与分词器存放位置 | `<仓库根>\reference` |
 
 ---
 
@@ -248,6 +263,36 @@ Host github.com
 
 那是通用参数（common parameter），和 `[CmdletBinding()]` 一起用会直接报
 `A parameter with the name 'Debug' was defined multiple times`。改用 `-DebugBuild` 之类。
+
+**9. 改完 `.ps1` 一定要检查 BOM —— 这个坑我反复踩。**
+
+本机只有 PowerShell 5.1（没有 pwsh 7）。**5.1 读没有 BOM 的 `.ps1` 会按 ANSI/GBK 解码**，
+中文注释和字符串变乱码，引号随之错位，报出来的却是一堆
+`Unexpected token '}'`、`Missing closing ')'` —— **看着像语法错，其实是编码错**。
+
+很多编辑器（包括一些自动化写入方式）保存 UTF-8 时**不带 BOM**，改一次就丢一次。
+所以每次改完脚本都跑一下这个检查：
+
+```powershell
+Get-ChildItem . -Filter *.ps1 | ForEach-Object {
+    $b = [System.IO.File]::ReadAllBytes($_.FullName)
+    $hasBom = ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)
+    '{0,-24} {1}' -f $_.Name, $(if ($hasBom) { 'OK' } else { '缺 BOM' })
+}
+```
+
+缺了就补：
+
+```powershell
+$t = [System.IO.File]::ReadAllText($f, (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText($f, $t, (New-Object System.Text.UTF8Encoding($true)))
+```
+
+**10. 编辑脚本时不要用字符串替换去改带反引号的代码。**
+
+我用 PowerShell 的 `-replace` 批量改 `.mjs` 文件时，模板字符串里的反引号被吃掉了
+（`` `${REF_DIR}/candidates` `` 变成了 `${REF_DIR}/candidates`），文件直接语法错。
+**批量替换只适合改纯文本，碰到代码请用编辑器逐处改。**
 
 ---
 

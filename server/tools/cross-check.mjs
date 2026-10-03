@@ -7,15 +7,21 @@
  *
  *   node tools/cross-check.mjs
  *
- * 输入：Kotlin 侧 dump 出来的序列（tools/kotlin-sequence-dump.json）
+ * 输入：Kotlin 侧 dump 出来的序列。先跑这个生成它：
+ *   gradlew :app:testDebugUnitTest --tests "*SequenceDumpTest*"
  */
 
 import * as ort from 'onnxruntime-node';
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { EN_DIR, repoRoot, requireModel, requireTokenizer } from './paths.mjs';
 
-const MODEL = 'D:/laya/reference/models/model_int4.onnx';
-const CFG = JSON.parse(await readFile('D:/laya/reference/en/rl_agent_config.json', 'utf8'));
-const DUMP = JSON.parse(await readFile('D:/laya/app/app/build/kotlin-sequence-dump.json', 'utf8'));
+requireTokenizer();
+
+const MODEL = requireModel();
+const CFG = JSON.parse(await readFile(path.join(EN_DIR, 'rl_agent_config.json'), 'utf8'));
+const DUMP_FILE = path.join(repoRoot, 'app/app/build/kotlin-sequence-dump.json');
+const DUMP = JSON.parse(await readFile(DUMP_FILE, 'utf8'));
 
 console.log(`读到 ${DUMP.cases.length} 个来自 Kotlin 的序列`);
 console.log(`maxLen=${CFG.max_len} head_max_len=${CFG.head_max_len}`);
@@ -30,7 +36,7 @@ for (const c of DUMP.cases) {
   const L = Math.max(...c.sequences.map((s) => s.ids.length));
 
   console.log(`\n--- ${c.name} ---`);
-  console.log(`  n=${n} L=${L} K=${K}  档位=${JSON.stringify(c.criteria)}`);
+  console.log(`  n=${n} L=${L} K=${K}`);
 
   const inputIds = new BigInt64Array(n * L).fill(BigInt(DUMP.padId));
   const attn = new BigInt64Array(n * L);
@@ -39,8 +45,14 @@ for (const c of DUMP.cases) {
   const qtype = new BigInt64Array(n);
 
   c.sequences.forEach((s, i) => {
-    s.ids.forEach((v, j) => { inputIds[i * L + j] = BigInt(v); attn[i * L + j] = 1n; });
-    s.markers.forEach((m, j) => { mpos[i * K + j] = BigInt(m); mmask[i * K + j] = 1; });
+    s.ids.forEach((v, j) => {
+      inputIds[i * L + j] = BigInt(v);
+      attn[i * L + j] = 1n;
+    });
+    s.markers.forEach((m, j) => {
+      mpos[i * K + j] = BigInt(m);
+      mmask[i * K + j] = 1;
+    });
     qtype[i] = BigInt(c.qtypeIndex ?? 1);
   });
 
@@ -78,7 +90,7 @@ for (const c of DUMP.cases) {
     for (const x of p) ent -= x * Math.log(Math.max(x, 1e-12));
     const conf = 1 - ent / Math.log(K);
 
-    results.push({ option: c.options[r], expected, conf, raw, p });
+    results.push({ option: c.options[r], expected, conf, raw });
   }
 
   results.sort((a, b) => b.expected - a.expected);

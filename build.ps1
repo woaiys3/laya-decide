@@ -20,12 +20,37 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# ── 机器相关路径 ─────────────────────────────────────────────────────────
+#
+# 这几个是本机路径，换机器要改。也可以用环境变量覆盖，免得到处改脚本：
+#   $env:LAYA_GRADLE / $env:ANDROID_HOME / $env:LAYA_ADB / $env:LAYA_AVD
+#
+# 仓库本身不含模型与构建产物，clone 之后先跑 fetch-model.ps1 拿模型。
 $Root    = $PSScriptRoot
 $AppDir  = Join-Path $Root 'app'
-$Gradle  = 'D:\dsh\aibendi\.tools\gradle-8.9\bin\gradle.bat'
-$Adb     = 'C:\Android\platform-tools\adb.exe'
-$SdkRoot = 'C:\Android'
-$Avd     = 'dsh-test30'
+
+# Gradle 的挑选顺序：
+#   1) 环境变量 LAYA_GRADLE 指定的
+#   2) 工程自带的 wrapper（最通用，但首次要联网下 Gradle 分发）
+#   3) 本机已装的完整发行版
+$Gradle = $env:LAYA_GRADLE
+if (-not $Gradle) {
+    $wrapper = Join-Path $AppDir 'gradlew.bat'
+    if (Test-Path $wrapper) {
+        $Gradle = $wrapper
+    } else {
+        $Gradle = 'D:\dsh\aibendi\.tools\gradle-8.9\bin\gradle.bat'
+    }
+}
+
+$SdkRoot = $env:ANDROID_HOME
+if (-not $SdkRoot) { $SdkRoot = 'C:\Android' }
+
+$Adb = $env:LAYA_ADB
+if (-not $Adb) { $Adb = Join-Path $SdkRoot 'platform-tools\adb.exe' }
+
+$Avd = $env:LAYA_AVD
+if (-not $Avd) { $Avd = 'dsh-test30' }
 
 function Fail($msg) {
     Write-Host ''

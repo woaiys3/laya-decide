@@ -59,43 +59,54 @@ Laya 的基座检查点**在开放式选择上的判断力有限**。官方 READ
 
 ## 快速开始
 
-### 1. 装 App
+### 0. 从源码开始：先把模型拉下来
 
-拿桌面上或 `app/app/build/outputs/apk/release/` 里的 arm64 包：
+**仓库里不含模型和分词器**（模型 262MB，不适合进 git）。clone 之后第一件事是跑：
+
+```powershell
+git clone https://github.com/woaiys3/laya-decide.git
+cd laya-decide
+.\fetch-model.ps1          # 下载分词器 + config（3.5MB）+ int4 模型（262MB）
+```
+
+- 只想跑验证工具？`.\fetch-model.ps1 -SkipModel` 就够了
+- 想放别处？`.\fetch-model.ps1 -OutDir D:\models`，然后设 `$env:LAYA_REF = "D:\models"`
+- 走 hf-mirror.com 镜像，**不需要任何账号**
+
+所有脚本都从自身位置解析路径，**不写死盘符**；`build.ps1` / `push-model.ps1` /
+`install-to-phone.ps1` / `server/tools/*.mjs` 都会自动找到模型。
+
+> 如果你的机器上 `github.com` 的 HTTPS 被阻断（TCP 能连但 HTTP 超时），
+> 推送要用 SSH，见 [BUILD.md](BUILD.md) 的踩坑记录第 6 条。
+
+### 1. 编译
+
+```powershell
+.\build.ps1
+```
+
+### 2. 装到手机
+
+```powershell
+.\install-to-phone.ps1 -WithModel   # 自动识别架构 + 装 App + 传模型
+```
+
+或者手动装 `app\app\build\outputs\apk\release\` 里的 arm64 包：
 
 ```
 app-arm64-v8a-release.apk     现代手机（2017 年后基本都是）
 app-armeabi-v7a-release.apk   老手机
 ```
 
-装完打开，它是**空的** —— 没有模型。下一步拿模型。
+**也可以不用电脑**：App 装完是空的，在设置里点「下载模型（约 262MB）」自己下即可。
 
-### 2. 拿模型（二选一）
+### 3. 模型放在哪
 
-**方式 A：让 App 自己下（最简单）**
-
-设置 → 端侧模型 → 「下载模型（约 262MB）」。走 hf-mirror.com 镜像，
-不需要注册任何账号。下完即可离线使用。
-
-**方式 B：从电脑传（快，且适合没有 Wi-Fi 或镜像不通的情况）**
-
-```powershell
-D:\laya\push-model.ps1                 # 默认推到模拟器/已连接设备
-```
-
-或者手动：
-
-```powershell
-$adb = "C:\Android\platform-tools\adb.exe"
-# 注意推到 /data/local/tmp —— Android 11+ 的 shell 读写不了 Android/data
-& $adb push model_int4.onnx /data/local/tmp/laya-model.onnx
-```
-
-App 会自动按这个顺序找模型：
+App 会自动按这个顺序找：
 
 1. `/sdcard/Android/data/com.laya.decide/files/models/model_int4.onnx`（App 自己下载的落点）
 2. `/data/data/com.laya.decide/files/models/model_int4.onnx`
-3. `/data/local/tmp/laya-model.onnx`（adb 部署落点）
+3. `/data/local/tmp/laya-model.onnx`（adb 部署落点，`push-model.ps1` 用这个）
 
 ### 3. 用
 
@@ -137,26 +148,36 @@ App 会自动按这个顺序找模型：
 ## 项目结构
 
 ```
-D:\laya\
+laya-decide\
 ├── README.md               ← 本文件
 ├── PROJECT.md              ← 设计决策与理由（为什么用打分而不是多选，等等）
 ├── BUILD.md                ← 编译、签名、踩坑记录
-├── build.ps1               ← 一键编译
-├── push-model.ps1          ← 把模型推到设备
-├── reference\              ← 参考实现产物（分词器、配置、ONNX 权重、Python 源码）
+├── LICENSE                 ← MIT（模型权重是 Apache-2.0，见文件内说明）
+├── .gitignore              ← 排除模型、构建产物、**签名密钥**
+│
+├── fetch-model.ps1         ← 【clone 后先跑这个】下载分词器 + int4 模型
+├── build.ps1               ← 一键编译（debug + release + 单测）
+├── push-model.ps1          ← 把模型推到设备（自动查找模型位置）
+├── install-to-phone.ps1    ← 一键装真机（自动识别架构，可带模型）
+├── push-to-github.ps1      ← 推送到 GitHub（内置密钥/凭证检查）
+│
+├── reference\              ← 模型与分词器（**不在仓库里**，由 fetch-model.ps1 生成）
 ├── screenshots\            ← 模拟器实测截图
+│
 ├── server\                 ← PC 端推理服务（可选）+ 全部验证工具
 │   ├── server.mjs
 │   ├── laya-core.mjs
 │   ├── inference.mjs
 │   ├── test\core.test.mjs
 │   └── tools\
+│       ├── paths.mjs                   ← 统一的路径解析（缺文件时给可照做的提示）
 │       ├── gen-tokenizer-fixture.mjs   ← 生成分词器逐 id 夹具
 │       ├── gen-sequence-fixture.mjs    ← 生成序列逐 id 夹具
 │       ├── inspect-model.mjs           ← 检查模型输入输出契约
 │       ├── cross-check.mjs             ← 用 Kotlin 的序列喂真实模型
 │       ├── prompt-experiment.mjs       ← 提问措辞的量化对比实验
 │       └── probe-hf.mjs / fetch-regex.mjs
+│
 └── app\                    ← Android 工程
     └── app\src\
         ├── main\

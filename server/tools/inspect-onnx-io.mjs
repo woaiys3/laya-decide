@@ -12,7 +12,8 @@ import * as ort from 'onnxruntime-node';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const DIR = 'D:/laya/reference/candidates';
+import { REF_DIR } from './paths.mjs';
+const DIR = path.join(REF_DIR, 'candidates');
 
 const REQUIRED_INPUTS = ['input_ids', 'attention_mask', 'marker_pos', 'marker_mask', 'qtype'];
 
