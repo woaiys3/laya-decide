@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  本 App 要访问局域网内 PC 上的 Laya 服务，走的是明文 HTTP。
+  Android 9+ 默认禁止明文流量，所以这里显式放开。
+
+  安全说明：放开明文只影响你主动填的那个局域网地址。这个 App 不向任何
+  第三方服务器发送数据，情境内容只到你自己指定的那个地址。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

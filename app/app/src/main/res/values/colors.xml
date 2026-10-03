@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#FFF6F7F9</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="stroke">#FFE2E5EA</color>
+    <color name="text_primary">#FF1B1F24</color>
+    <color name="text_secondary">#FF6B7280</color>
+    <color name="accent">#FF2F6BFF</color>
+    <color name="accent_light">#FFEAF0FF</color>
+    <color name="warn_bg">#FFFFF6E5</color>
+    <color name="warn_stroke">#FFF0D9A8</color>
+    <color name="track">#FFEDF0F4</color>
+    <color name="rank_badge">#FF8A94A6</color>
+    <color name="rank_badge_top">#FF2F6BFF</color>
+</resources>

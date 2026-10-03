@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">抉择</string>
+
+    <string name="section_situation">情境</string>
+    <string name="hint_situation">把背景写清楚。比如：我拿到一个创业公司 offer，薪资降 30%，但有期权和很大话语权。现在在大厂做螺丝钉，房贷压力不小。</string>
+
+    <string name="section_options">选项</string>
+    <string name="hint_option">填一个选项</string>
+    <string name="btn_add_option">＋ 加一个选项</string>
+
+    <string name="btn_decide">让 Laya 帮我选</string>
+    <string name="btn_deciding">推理中…</string>
+    <string name="btn_settings">设置</string>
+    <string name="btn_clear">清空</string>
+    <string name="btn_delete">删除</string>
+    <string name="btn_test">测试连接</string>
+    <string name="btn_cancel">取消</string>
+
+    <string name="section_result">结果</string>
+    <string name="settings_title">设置</string>
+
+    <string name="label_backend">推理后端</string>
+    <string name="label_server">服务地址</string>
+    <string name="hint_server">例如 192.168.1.5:8931</string>
+    <string name="backend_demo">演示模式（本地，非 AI）</string>
+    <string name="backend_http">PC 服务（局域网）</string>
+    <string name="backend_local">端侧模型（完全离线）</string>
+
+    <string name="note_demo">演示模式：分数由本地启发式算出，只为让你先看流程，不是真实推理。想要真实（但同样不靠谱的）效果请选「端侧模型」。</string>
+    <string name="note_local_missing">端侧模型还没下载。下面点「下载模型」把它存到手机里（约 262MB，只需一次），之后完全离线可用。</string>
+
+    <string name="label_local_model">端侧模型</string>
+    <string name="btn_download_model">下载模型（约 262MB）</string>
+    <string name="btn_downloading">下载中…</string>
+    <string name="btn_redownload_model">重新下载</string>
+
+    <string name="model_ready">已就绪 · %1$s · %2$s</string>
+    <string name="model_loading">首次加载中，请稍候…</string>
+    <string name="model_absent">未下载</string>
+    <string name="model_progress">已下载 %1$s / %2$s（%3$d%%）</string>
+    <string name="model_download_done">模型下载完成，可以离线使用了</string>
+    <string name="model_download_failed">下载失败：%1$s</string>
+
+    <string name="empty_options">还没有选项。至少加两个。</string>
+    <string name="need_two_options">至少需要两个选项才能做决策。</string>
+    <string name="option_placeholder_hint">选项 %1$d</string>
+
+    <string name="result_pick">推荐</string>
+    <string name="result_close_call">这两个其实差不多</string>
+    <string name="result_margin">分差 %1$.2f</string>
+
+    <!--
+      置信度分档。阈值来自实测：基座模型在开放式选择上的置信度普遍在
+      0.09-0.14 之间徘徊，25% 以上就已经算它比较有把握了。
+    -->
+    <string name="conf_high">模型比较有把握</string>
+    <string name="conf_medium">模型倾向不明显</string>
+    <string name="conf_low">模型基本在猜</string>
+    <string name="conf_score_line">档位 %1$.2f / %2$.2f · %3$s</string>
+    <string name="conf_line">确定度 %1$d%% · %2$s</string>
+
+    <!--
+      排序不可信时的诚实说明。触发条件：所有选项的分差 < 0.10。
+      这种情况下"第一名"基本是噪声，不点明的话用户会当真。
+    -->
+    <string name="scale_caveat">这些选项的分数几乎没有差别（最高 %1$.2f，满分 %2$.2f）。这不代表"它们一样好"，而是模型没有分辨出高低 —— 换个说法问它，排序可能就变了。请把下面的名次当参考，别当结论。</string>
+
+    <string name="model_note">纯属娱乐：这模型的判断力有限，结果别当真，尤其别拿它做重大决定。</string>
+
+    <string name="testing">正在测试…</string>
+    <string name="test_ok">连接成功｜模式：%1$s</string>
+    <string name="test_fail">连不上：%1$s</string>
+
+    <string name="history_title">历史记录（点击载入）</string>
+    <string name="history_empty">还没有历史记录。</string>
+    <string name="history_clear">清空历史</string>
+
+    <string name="decide_failed">决策失败：%1$s</string>
+    <string name="empty_situation">请先填写情境描述。</string>
+</resources>

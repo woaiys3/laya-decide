@@ -1,0 +1,19 @@
+{
+  "name": "laya-decide-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PC 端 Laya 决策推理服务，供 Android 决策助手 App 调用",
+  "type": "module",
+  "main": "server.mjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "start:real": "cross-env LAYA_MODE=real node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "optionalDependencies": {
+    "@receptron/laya": "^0.1.2"
+  }
+}

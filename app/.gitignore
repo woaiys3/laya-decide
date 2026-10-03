@@ -1,0 +1,18 @@
+# 构建产物
+build/
+.gradle/
+*.apk
+*.aab
+
+# 本机相关
+local.properties
+
+# 签名材料 —— 千万不要提交
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
