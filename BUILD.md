@@ -294,6 +294,85 @@ $t = [System.IO.File]::ReadAllText($f, (New-Object System.Text.UTF8Encoding($fal
 （`` `${REF_DIR}/candidates` `` 变成了 `${REF_DIR}/candidates`），文件直接语法错。
 **批量替换只适合改纯文本，碰到代码请用编辑器逐处改。**
 
+**11. `Invoke-RestMethod` 发 JSON 时会把中文变成 `?` —— 别用它调 GitHub API。**
+
+这是最阴的一个坑，因为它**不报错**。
+
+我用它创建仓库，传的 description 是中文，结果 GitHub 上存成了一串问号：
+
+```
+"????? Android ?????:???? Laya ?????????(ONNX Runtime + ONNX ????)"
+```
+
+27 个中文字全变成 U+003F（`?`），字符数还对得上 —— 说明是发送时被替换掉的，
+不是接收端解码问题。同一个脚本里 `ConvertTo-Json` 的输出要经
+`-Body $string` 变成字节流，编码就在那一层丢了。
+
+**解法：改用 Node 的 `fetch`**，它按 UTF-8 编码 BodyInit：
+
+```js
+await fetch(url, {
+  method: 'PATCH',
+  headers: { Authorization: `token ${t}`, 'Content-Type': 'application/json; charset=utf-8' },
+  body: JSON.stringify({ description: '中文简介' }),   // ← 字符串，fetch 自己按 UTF-8 编码
+});
+```
+
+工具在 `server/tools/fix-repo-meta.mjs`（改简介）和 `server/tools/audit-encoding.mjs`
+（全面体检 GitHub 上所有元数据的编码）。
+
+**体检过的字段**：仓库简介/名称、发行版名称与说明、附件名、提交信息、标签名、
+分支名、全部文件路径。出过一次问题的只有仓库简介 —— 因为只有它是我用
+`Invoke-RestMethod` 写的。
+
+**12. GitHub 的「标签 ⇄ 发行版」是硬绑定的。**
+
+我为了改提交信息的 BOM 而重写历史，需要删掉远程 `v1.0.0` 标签再重建。
+**标签一删，挂在上面的发行版立刻变成「未打标签的草稿」**，页面路径变成
+`releases/tag/untagged-xxxxx`。
+
+好消息：**附件一个都不会丢**，只是降级成草稿。修法是 PATCH 回去：
+
+```js
+await fetch(`https://api.github.com/repos/OWNER/REPO/releases/${releaseId}`, {
+  method: 'PATCH',
+  headers: { Authorization: `token ${t}`, 'Content-Type': 'application/json; charset=utf-8' },
+  body: JSON.stringify({ tag_name: 'v1.0.0', draft: false }),
+});
+```
+
+**顺序很重要**：先记下 `release.id` → 重写历史 → 重建标签 → PATCH 挂回去。
+不要删了重做（那要重传几百 MB 附件）。
+
+**13. 改提交信息会重写历史，改完必须核对 tree hash。**
+
+用 `git filter-branch --msg-filter` 只改信息时，**tree hash 必须保持不变** ——
+那是"文件内容零改动"的唯一硬证据：
+
+```powershell
+git log --format="%h %T %s"      # %T 是 tree hash，改前改后逐条比对
+```
+
+另外 `filter-branch` 会把原状态留在 `refs/original/`，确认无误后再删：
+
+```powershell
+git for-each-ref refs/original
+git update-ref -d refs/original/refs/heads/main
+```
+
+⚠️ 还有一点：`filter-branch -- --all` 会**连你自己刚建的安全分支一起重写**，
+所以别指望用本地分支当备份 —— 要靠 `refs/original/`。
+
+**14. `sed` 不支持 `\xEF` 这类转义，剥 BOM 要用 `perl`。**
+
+Git for Windows 自带 perl。POSIX sed 里 `\xEF` 是字面量，不会匹配字节 0xEF，
+所以这条命令**看起来跑了但什么都没改**（更糟的是它不报错）：
+
+```bash
+git filter-branch --msg-filter 'sed "1s/^\xEF\xBB\xBF//"'   # ❌ 无效
+git filter-branch --msg-filter "perl -pe 's/^\xEF\xBB\xBF//'" # ✅ 有效
+```
+
 ---
 
 ## 换一台机器要改什么
