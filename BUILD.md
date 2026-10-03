@@ -199,6 +199,56 @@ $b = [System.IO.File]::ReadAllBytes('D:\laya\build.ps1')
 
 `-no-window` 下 `adb shell screencap` 依然正常，所以自动化验证不需要把窗口弹出来。
 
+**6. 这台机器上 `github.com` 的 HTTPS 被阻断，必须用 SSH。**
+
+| 域名 | 结果 |
+|---|---|
+| `api.github.com` | ✅ 通（HTTP 200） |
+| `codeload.github.com` | ✅ 通 |
+| `raw.githubusercontent.com` | ✅ 通 |
+| **`github.com`** | ❌ **TCP 能连、HTTP 超时** —— 典型的 SNI 阻断 |
+
+所以 `git push` 走 HTTPS 会报 `Recv failure: Connection was reset`。
+
+**解法：改用 SSH。** SSH 不走 SNI，能绕过去：
+
+```powershell
+# 生成密钥（如果还没有）
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\id_ed25519" -N '""'
+
+# 把公钥加到 GitHub：Settings -> SSH and GPG keys -> New SSH key
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub"
+
+# 切换 remote 并推送
+git remote set-url origin git@github.com:用户名/仓库.git
+git push -u origin main
+```
+
+如果 22 端口也被封，GitHub 有官方备用通道（443 端口），在 `~/.ssh/config` 里配：
+
+```
+Host github.com
+    HostName ssh.github.com
+    Port 443
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+**7. 模拟器启动必须用 `-gpu guest`（在这台机器上）。**
+
+`-gpu swiftshader_indirect` 会去找 `opengl32sw.dll`，这台机器的模拟器目录里没有，直接崩。
+`-gpu auto` 时好时坏（有时也会走到 swiftshader 分支而失败）。
+**`-gpu guest` 完全不走宿主机 OpenGL，最稳**：
+
+```powershell
+& C:\Android\emulator\emulator.exe -avd dsh-test30 -no-snapshot -no-audio -no-boot-anim -gpu guest
+```
+
+**8. Windows PowerShell 5.1 的参数名不能用 `-Debug`。**
+
+那是通用参数（common parameter），和 `[CmdletBinding()]` 一起用会直接报
+`A parameter with the name 'Debug' was defined multiple times`。改用 `-DebugBuild` 之类。
+
 ---
 
 ## 换一台机器要改什么

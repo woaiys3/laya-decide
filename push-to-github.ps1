@@ -1,18 +1,28 @@
 ﻿# 把项目推到 GitHub。
 #
 # 用法：
-#   .\push-to-github.ps1 -Repo "https://github.com/你的用户名/laya-decide.git"
+#   .\push-to-github.ps1 -Repo "git@github.com:你的用户名/laya-decide.git"
 #
 # 分支默认 main。已经配好 remote 的话可以不带 -Repo 直接跑。
 #
-# ⚠️ 关于令牌（重要）
+# ── 为什么推荐 SSH 而不是 HTTPS ──────────────────────────────────────────
 #
-#   这个脚本**不会**存任何令牌。如果仓库是私有的、或者你没配 SSH key，
-#   git push 时会弹出凭据输入框，或者你事先配好：
+#   这台机器上 github.com 的 HTTPS(443) 被 SNI 阻断：TCP 能连，HTTP 超时。
+#   走 HTTPS 推送会报 "Recv failure: Connection was reset"。
+#   而 api.github.com / codeload.github.com 是通的，很容易误判成"没权限"。
 #
+#   SSH 不走 SNI，能正常用。首次使用三步：
+#     1) ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\id_ed25519" -N '""'
+#     2) 把 id_ed25519.pub 的内容加到 GitHub -> Settings -> SSH and GPG keys
+#     3) -Repo 用 git@github.com:用户名/仓库.git
+#
+#   22 端口也不通时，在 ~/.ssh/config 里把 HostName 换成 ssh.github.com、Port 换成 443。
+#
+# ── 关于令牌 ────────────────────────────────────────────────────────────
+#
+#   这个脚本**不会**存任何令牌。如果非要用 HTTPS，先配凭据助手：
 #     git config --global credential.helper manager
-#
-#   然后第一次 push 输入用户名 + Personal Access Token。
+#   然后第一次 push 时输入用户名 + Personal Access Token。
 #
 #   ★ 千万不要把 token 写进这个文件、写进 URL、或提交到仓库里。
 #     token 一旦进了 git 历史，就算后来删掉文件也还在历史里，必须去 GitHub 吊销。
