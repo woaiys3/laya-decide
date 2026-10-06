@@ -1,5 +1,7 @@
 # 抉择 · Laya 决策助手
 
+**下载安装包 → [dshaa.xin/projects/laya.html](https://dshaa.xin/projects/laya.html)**
+
 一个 Android App：**导入情境 → 列几个选项 → 让 Laya 帮你选**。
 
 **完全离线。不需要账号、不需要服务器、不联网也能用。**
