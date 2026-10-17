@@ -41,11 +41,13 @@ export function buildQuestions(options) {
   const questions = {};
 
   // 每个选项一个独立的 score 问题。
-  // 选项文本放进 instructions，让模型评估「这个选项在该情境下有多合适」。
+  // 选项文本放进 instructions，让模型评估「这个选项在该情境下有多好」。
+  // 措辞必须和 Android 端 LayaAgent.kt 一致 —— 这是 prompt-experiment 里
+  // 区分度最好的那一版（B 直白提问，见 PROJECT.md 第三节）。
   options.forEach((opt, i) => {
     questions[scoreKey(i)] = {
       type: 'score',
-      instructions: `在这个情境下，「${opt}」这个选择有多合适？请评估它对该情境的适配程度。`,
+      instructions: `面对上述情境，选择「${opt}」有多好？`,
       criteria: SCORE_CRITERIA,
     };
   });

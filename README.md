@@ -28,6 +28,9 @@
 一个非自回归的 System 1 决策模型：它不生成文字，而是在一次前向传播里对"带类型的问题"
 直接给出概率化答案。
 
+同一套模型也能通过**本地 MCP 服务**给 AI 客户端用，让 AI 自己来问你这个问题 ——
+见下文「给 AI 用：本地 MCP 服务」。
+
 ---
 
 ## 先说清楚：它擅长什么，不擅长什么
@@ -132,6 +135,64 @@ App 会自动按这个顺序找：
 
 ---
 
+## 给 AI 用：本地 MCP 服务
+
+`server/mcp.mjs` 把这套判断能力做成了一个本地 [MCP](https://modelcontextprotocol.io) 服务：
+Claude Desktop / Cursor / Cherry Studio 这类客户端配一行就能调用，让 AI 在回答
+「我该不该…」时真的跑一次模型，而不是自己瞎猜。
+
+服务走 **stdio**，只在本地跑，不开端口、不上传任何东西。
+
+### 准备
+
+```powershell
+cd D:\laya\server
+npm install            # 装 MCP SDK
+cd ..
+.\fetch-model.ps1      # 如果还没下模型：262MB，MCP 默认用真实 int4 模型
+```
+
+### 配置客户端
+
+Claude Desktop（Windows，`%APPDATA%\Claude\claude_desktop_config.json`）：
+
+```json
+{
+  "mcpServers": {
+    "laya-decide": {
+      "command": "node",
+      "args": ["D:\\laya\\server\\mcp.mjs"]
+    }
+  }
+}
+```
+
+Cursor（`.cursor/mcp.json`）或 Cherry Studio 用同样的结构。
+
+### 它暴露两个工具
+
+| 工具 | 作用 |
+|---|---|
+| `decide` | 给情境和 2–20 个选项，返回排序 + 推荐 + 分差；参数不合法时返回可读的错误 |
+| `list_backends` | 报告当前是真实模型还是演示模式、模型在不在（不会加载、不会下载） |
+
+### 模式
+
+默认 `LAYA_MODE=auto`：有模型就用真实 int4 模型，没有就退到演示模式。
+
+```powershell
+$env:LAYA_MODE = "real"   # 强制真实模型；模型缺失时决定清晰的错误
+$env:LAYA_MODE = "mock"   # 强制演示模式，秒回
+```
+
+> 真实模式首次调用会加载模型（约 6 秒），之后每次 100ms–1s。
+> 模型文件不在时**不会偷偷下载 262MB**，而是报错让你先跑 `fetch-model.ps1`。
+
+**还是那句话**：这是未微调的基座模型，判断力有限。MCP 工具的描述和返回文本里
+都带着同样的提醒，AI 应该把结果当参考，而不是结论。
+
+---
+
 ## 关于模型
 
 | 项 | 值 |
@@ -169,10 +230,12 @@ laya-decide\
 ├── screenshots\            ← 模拟器实测截图
 │
 ├── server\                 ← 本地 MCP 服务 + 全部验证工具
-│   ├── mcp.mjs
-│   ├── laya-core.mjs
-│   ├── inference.mjs
-│   ├── test\core.test.mjs
+│   ├── mcp.mjs                           ← MCP 入口（stdio，decide / list_backends）
+│   ├── onnx-backend.mjs                  ← int4 ONNX 推理（与 App 同一套序列）
+│   ├── laya-core.mjs                     ← 校验 / 排序 / 决策组装（纯函数）
+│   ├── inference.mjs                     ← mock + @receptron/laya 后端
+│   ├── test\core.test.mjs                ← 决策核心单测
+│   ├── test\mcp.test.mjs                 ← 真的拉起 MCP 服务自测
 │   └── tools\
 │       ├── paths.mjs                   ← 统一的路径解析（缺文件时给可照做的提示）
 │       ├── gen-tokenizer-fixture.mjs   ← 生成分词器逐 id 夹具
