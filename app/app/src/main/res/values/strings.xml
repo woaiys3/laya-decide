@@ -39,10 +39,21 @@
     <string name="mcp_lan">允许局域网访问</string>
     <string name="mcp_port_hint">端口（1024–65535）</string>
     <string name="mcp_apply">应用</string>
-    <string name="mcp_note">默认关闭。MCP 始终用端侧模型；开启后手机要保持 App 运行；局域网模式没有鉴权，只在你信任的网络里打开。</string>
+    <string name="mcp_copy">复制</string>
+    <string name="mcp_copied">MCP 地址已复制</string>
+    <string name="mcp_copy_empty">服务没在运行，没有地址可复制</string>
+    <string name="mcp_note">默认关闭。MCP 始终用端侧模型；开启后通知栏常驻保活（别从最近任务里划掉）。局域网模式没有鉴权，只在你信任的网络里打开。</string>
     <string name="mcp_status_off">已关闭</string>
     <string name="mcp_status_running">运行中 · %1$s</string>
     <string name="mcp_status_lan_no_ip">运行中（局域网）· 没找到局域网 IP，先连 Wi-Fi</string>
+
+    <string name="mcp_channel_name">MCP 服务</string>
+    <string name="mcp_channel_desc">MCP 服务运行时显示的通知</string>
+    <string name="mcp_notification_title">抉择 · MCP 服务运行中</string>
+    <string name="mcp_notification_starting">正在启动…</string>
+    <string name="mcp_notification_failed">MCP 服务启动失败</string>
+    <string name="mcp_notification_hint">在 App 设置里可以关闭；点通知回到 App。</string>
+    <string name="mcp_stop">停止</string>
 
     <string name="model_ready">已就绪 · %1$s · %2$s</string>
     <string name="model_loading">首次加载中，请稍候…</string>

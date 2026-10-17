@@ -337,13 +337,34 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/tvMcpStatus"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:textColor="@color/text_secondary"
-                android:textSize="12sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvMcpStatus"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:longClickable="true"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnMcpCopy"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_btn_outline"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="@string/mcp_copy"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"

@@ -40,8 +40,6 @@ class McpHttpServer private constructor(private val appContext: Context) {
     companion object {
         private const val TAG = "LayaMcp"
 
-        const val DEFAULT_PORT = 8940
-
         /** 协议版本白名单，和 SDK 1.32 的 SUPPORTED_PROTOCOL_VERSIONS 对齐。 */
         private val SUPPORTED_PROTOCOLS = setOf(
             "2025-11-25",

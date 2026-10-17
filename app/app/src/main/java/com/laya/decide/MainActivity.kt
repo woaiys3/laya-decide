@@ -1,7 +1,12 @@
 package com.laya.decide
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputFilter
@@ -28,11 +33,11 @@ import com.laya.decide.databinding.ActivityMainBinding
 import com.laya.decide.databinding.RowHistoryBinding
 import com.laya.decide.databinding.RowOptionBinding
 import com.laya.decide.databinding.RowRankedBinding
+import com.laya.decide.mcp.McpForegroundService
 import com.laya.decide.mcp.McpHttpServer
-import java.net.Inet4Address
-import java.net.NetworkInterface
+import com.laya.decide.mcp.McpNetwork
+import com.laya.decide.mcp.McpPrefs
 import java.text.SimpleDateFormat
-import java.util.Collections
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +55,9 @@ class MainActivity : AppCompatActivity() {
 
     /** App 内置的 MCP 服务（给电脑上的 AI 客户端用）。 */
     private lateinit var mcpServer: McpHttpServer
+
+    /** 当前可复制的 MCP 地址；服务没运行时为 null。 */
+    private var mcpEndpoint: String? = null
 
     /** 防止代码改 Switch 状态时反过来触发监听器。 */
     private var mcpUiUpdating = false
@@ -333,9 +341,9 @@ class MainActivity : AppCompatActivity() {
     // -----------------------------------------------------------------------
 
     private fun setupMcpSettings() {
-        val enabled = prefs.getBoolean(KEY_MCP_ENABLED, false)
-        val lan = prefs.getBoolean(KEY_MCP_LAN, false)
-        val port = prefs.getInt(KEY_MCP_PORT, McpHttpServer.DEFAULT_PORT)
+        val enabled = prefs.getBoolean(McpPrefs.KEY_ENABLED, false)
+        val lan = prefs.getBoolean(McpPrefs.KEY_LAN, false)
+        val port = prefs.getInt(McpPrefs.KEY_PORT, McpPrefs.DEFAULT_PORT)
 
         b.etMcpPort.setText(port.toString())
         b.swMcpLan.isChecked = lan
@@ -345,20 +353,19 @@ class MainActivity : AppCompatActivity() {
 
         b.swMcpEnabled.setOnCheckedChangeListener { _, checked ->
             if (mcpUiUpdating) return@setOnCheckedChangeListener
-            prefs.edit().putBoolean(KEY_MCP_ENABLED, checked).apply()
+            prefs.edit().putBoolean(McpPrefs.KEY_ENABLED, checked).apply()
             setMcpControlsEnabled(checked)
             if (checked) {
                 startMcp(showToast = true)
             } else {
-                mcpServer.stop()
-                updateMcpStatus()
+                stopMcp()
                 toast("MCP 服务已关闭")
             }
         }
 
         b.swMcpLan.setOnCheckedChangeListener { _, checked ->
             if (mcpUiUpdating) return@setOnCheckedChangeListener
-            prefs.edit().putBoolean(KEY_MCP_LAN, checked).apply()
+            prefs.edit().putBoolean(McpPrefs.KEY_LAN, checked).apply()
             // 改绑地址要重启监听：127.0.0.1 ↔ 0.0.0.0。
             if (mcpServer.isRunning) startMcp(showToast = true)
         }
@@ -367,6 +374,12 @@ class MainActivity : AppCompatActivity() {
             if (!hasFocus) applyMcpPort(force = false)
         }
         b.btnMcpApply.setOnClickListener { applyMcpPort(force = true) }
+        b.btnMcpCopy.setOnClickListener { copyMcpEndpoint() }
+        // 地址那一行也可以长按复制，符合手机上的习惯。
+        b.tvMcpStatus.setOnLongClickListener {
+            copyMcpEndpoint()
+            true
+        }
 
         // 上次开着就自动接着跑（进程被系统杀掉后，重新打开 App 会恢复）。
         if (enabled && !mcpServer.isRunning) {
@@ -381,20 +394,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMcp(showToast: Boolean): Boolean {
         val port = b.etMcpPort.text.toString().trim().toIntOrNull()
-        if (port == null || port !in 1024..65535) {
-            failMcp("端口要在 1024–65535 之间")
+        if (!McpPrefs.isValidPort(port)) {
+            failMcp("端口要在 ${McpPrefs.MIN_PORT}–${McpPrefs.MAX_PORT} 之间")
             return false
         }
 
         val lan = b.swMcpLan.isChecked
         return try {
-            mcpServer.start(port, lan)
+            if (!mcpServer.isRunning || mcpServer.port != port || mcpServer.lan != lan) {
+                mcpServer.start(port!!, lan)
+            }
             prefs.edit()
-                .putBoolean(KEY_MCP_ENABLED, true)
-                .putBoolean(KEY_MCP_LAN, lan)
-                .putInt(KEY_MCP_PORT, port)
+                .putBoolean(McpPrefs.KEY_ENABLED, true)
+                .putBoolean(McpPrefs.KEY_LAN, lan)
+                .putInt(McpPrefs.KEY_PORT, port)
                 .apply()
             b.etMcpPort.setText(port.toString())
+            ensureNotificationPermission()
+            // 前台 Service 负责保活和通知；server 已经在上面同步起好了。
+            McpForegroundService.start(this, port, lan)
             updateMcpStatus()
             if (showToast) toast("MCP 服务已启动")
             true
@@ -404,13 +422,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun stopMcp() {
+        mcpServer.stop()
+        McpForegroundService.stop(this)
+        updateMcpStatus()
+    }
+
     private fun applyMcpPort(force: Boolean) {
         val raw = b.etMcpPort.text.toString().trim()
         val newPort = raw.toIntOrNull()
-        val saved = prefs.getInt(KEY_MCP_PORT, McpHttpServer.DEFAULT_PORT)
+        val saved = prefs.getInt(McpPrefs.KEY_PORT, McpPrefs.DEFAULT_PORT)
 
-        if (newPort == null || newPort !in 1024..65535) {
-            toast("端口要在 1024–65535 之间", long = true)
+        if (!McpPrefs.isValidPort(newPort)) {
+            toast("端口要在 ${McpPrefs.MIN_PORT}–${McpPrefs.MAX_PORT} 之间", long = true)
             b.etMcpPort.setText(saved.toString())
             return
         }
@@ -419,7 +443,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        prefs.edit().putInt(KEY_MCP_PORT, newPort).apply()
+        prefs.edit().putInt(McpPrefs.KEY_PORT, newPort!!).apply()
         if (mcpServer.isRunning || b.swMcpEnabled.isChecked) {
             startMcp(showToast = true)
         } else {
@@ -431,7 +455,8 @@ class MainActivity : AppCompatActivity() {
     /** 启动失败时把开关复位，别让界面显示「开」而实际没跑。 */
     private fun failMcp(message: String) {
         mcpServer.stop()
-        prefs.edit().putBoolean(KEY_MCP_ENABLED, false).apply()
+        McpForegroundService.stop(this)
+        prefs.edit().putBoolean(McpPrefs.KEY_ENABLED, false).apply()
         mcpUiUpdating = true
         b.swMcpEnabled.isChecked = false
         mcpUiUpdating = false
@@ -441,6 +466,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateMcpStatus() {
+        mcpEndpoint = if (mcpServer.isRunning) {
+            McpNetwork.endpoint(mcpServer.port, mcpServer.lan)
+        } else {
+            null
+        }
+
+        b.btnMcpCopy.isEnabled = mcpEndpoint != null
+        b.btnMcpCopy.alpha = if (mcpEndpoint != null) 1f else 0.45f
+
         if (!mcpServer.isRunning) {
             b.tvMcpStatus.text = getString(R.string.mcp_status_off)
             b.tvMcpStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
@@ -448,31 +482,50 @@ class MainActivity : AppCompatActivity() {
         }
 
         b.tvMcpStatus.setTextColor(ContextCompat.getColor(this, R.color.accent))
-        if (!mcpServer.lan) {
-            b.tvMcpStatus.text =
-                getString(R.string.mcp_status_running, mcpServer.endpoint("127.0.0.1"))
-            return
-        }
-
-        val ip = localIpv4()
-        b.tvMcpStatus.text = if (ip == null) {
-            getString(R.string.mcp_status_lan_no_ip)
+        b.tvMcpStatus.text = if (mcpEndpoint != null) {
+            getString(R.string.mcp_status_running, mcpEndpoint!!)
         } else {
-            getString(R.string.mcp_status_running, mcpServer.endpoint(ip))
+            getString(R.string.mcp_status_lan_no_ip)
         }
     }
 
-    /** 找本机局域网 IPv4，用来在设置里显示可复制的地址。不需要权限。 */
-    private fun localIpv4(): String? = try {
-        Collections.list(NetworkInterface.getNetworkInterfaces())
-            .asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { Collections.list(it.inetAddresses).asSequence() }
-            .filterIsInstance<Inet4Address>()
-            .firstOrNull { it.isSiteLocalAddress }
-            ?.hostAddress
-    } catch (e: Exception) {
-        null
+    private fun copyMcpEndpoint() {
+        val endpoint = mcpEndpoint
+        if (endpoint == null) {
+            toast(getString(R.string.mcp_copy_empty))
+            return
+        }
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("MCP 地址", endpoint))
+        toast(getString(R.string.mcp_copied))
+    }
+
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!::mcpServer.isInitialized) return
+
+        // 用户可能从通知栏点了「停止」，回前台时把界面同步过来。
+        // 没变化就别动，避免把正在编辑的端口改回去。
+        val running = mcpServer.isRunning
+        val prefEnabled = prefs.getBoolean(McpPrefs.KEY_ENABLED, false)
+        if (running == b.swMcpEnabled.isChecked && prefEnabled == b.swMcpEnabled.isChecked) return
+
+        mcpUiUpdating = true
+        b.swMcpEnabled.isChecked = running && prefEnabled
+        b.swMcpLan.isChecked = prefs.getBoolean(McpPrefs.KEY_LAN, false)
+        b.etMcpPort.setText(prefs.getInt(McpPrefs.KEY_PORT, McpPrefs.DEFAULT_PORT).toString())
+        mcpUiUpdating = false
+        setMcpControlsEnabled(b.swMcpEnabled.isChecked)
+        updateMcpStatus()
     }
 
     // -----------------------------------------------------------------------
@@ -762,8 +815,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS = "laya_decide_prefs"
         private const val KEY_MODE = "backend_mode"
-        private const val KEY_MCP_ENABLED = "mcp_enabled"
-        private const val KEY_MCP_LAN = "mcp_lan"
-        private const val KEY_MCP_PORT = "mcp_port"
+        private const val REQUEST_NOTIFICATIONS = 42
     }
 }
