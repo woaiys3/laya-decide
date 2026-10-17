@@ -34,6 +34,16 @@
     <string name="btn_downloading">下载中…</string>
     <string name="btn_redownload_model">重新下载</string>
 
+    <string name="label_mcp">MCP 服务（给 AI 用）</string>
+    <string name="mcp_enabled">启用 MCP 服务</string>
+    <string name="mcp_lan">允许局域网访问</string>
+    <string name="mcp_port_hint">端口（1024–65535）</string>
+    <string name="mcp_apply">应用</string>
+    <string name="mcp_note">默认关闭。MCP 始终用端侧模型；开启后手机要保持 App 运行；局域网模式没有鉴权，只在你信任的网络里打开。</string>
+    <string name="mcp_status_off">已关闭</string>
+    <string name="mcp_status_running">运行中 · %1$s</string>
+    <string name="mcp_status_lan_no_ip">运行中（局域网）· 没找到局域网 IP，先连 Wi-Fi</string>
+
     <string name="model_ready">已就绪 · %1$s · %2$s</string>
     <string name="model_loading">首次加载中，请稍候…</string>
     <string name="model_absent">未下载</string>

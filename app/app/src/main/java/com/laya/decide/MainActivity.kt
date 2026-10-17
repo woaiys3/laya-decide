@@ -28,7 +28,11 @@ import com.laya.decide.databinding.ActivityMainBinding
 import com.laya.decide.databinding.RowHistoryBinding
 import com.laya.decide.databinding.RowOptionBinding
 import com.laya.decide.databinding.RowRankedBinding
+import com.laya.decide.mcp.McpHttpServer
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.text.SimpleDateFormat
+import java.util.Collections
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +48,12 @@ class MainActivity : AppCompatActivity() {
 
     private val optionRows = mutableListOf<RowOptionBinding>()
 
+    /** App 内置的 MCP 服务（给电脑上的 AI 客户端用）。 */
+    private lateinit var mcpServer: McpHttpServer
+
+    /** 防止代码改 Switch 状态时反过来触发监听器。 */
+    private var mcpUiUpdating = false
+
     /** 正在进行的模型下载。非空表示下载中，用来防止重复点击。 */
     private var downloadJob: Job? = null
 
@@ -54,10 +64,12 @@ class MainActivity : AppCompatActivity() {
 
         history = HistoryStore(this)
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        mcpServer = McpHttpServer.get(this)
 
         setupInitialOptions()
         setupSituationInput()
         setupSettings()
+        setupMcpSettings()
         wireButtons()
 
         // 第一次用的时候把设置面板摊开，否则用户不知道要选后端、下模型。
@@ -314,6 +326,153 @@ class MainActivity : AppCompatActivity() {
 
         b.btnDownloadModel.setOnClickListener { downloadModel() }
         updateModelStatus()
+    }
+
+    // -----------------------------------------------------------------------
+    // MCP 服务（给电脑上的 AI 客户端用）
+    // -----------------------------------------------------------------------
+
+    private fun setupMcpSettings() {
+        val enabled = prefs.getBoolean(KEY_MCP_ENABLED, false)
+        val lan = prefs.getBoolean(KEY_MCP_LAN, false)
+        val port = prefs.getInt(KEY_MCP_PORT, McpHttpServer.DEFAULT_PORT)
+
+        b.etMcpPort.setText(port.toString())
+        b.swMcpLan.isChecked = lan
+        b.swMcpEnabled.isChecked = enabled
+        setMcpControlsEnabled(enabled)
+        updateMcpStatus()
+
+        b.swMcpEnabled.setOnCheckedChangeListener { _, checked ->
+            if (mcpUiUpdating) return@setOnCheckedChangeListener
+            prefs.edit().putBoolean(KEY_MCP_ENABLED, checked).apply()
+            setMcpControlsEnabled(checked)
+            if (checked) {
+                startMcp(showToast = true)
+            } else {
+                mcpServer.stop()
+                updateMcpStatus()
+                toast("MCP 服务已关闭")
+            }
+        }
+
+        b.swMcpLan.setOnCheckedChangeListener { _, checked ->
+            if (mcpUiUpdating) return@setOnCheckedChangeListener
+            prefs.edit().putBoolean(KEY_MCP_LAN, checked).apply()
+            // 改绑地址要重启监听：127.0.0.1 ↔ 0.0.0.0。
+            if (mcpServer.isRunning) startMcp(showToast = true)
+        }
+
+        b.etMcpPort.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) applyMcpPort(force = false)
+        }
+        b.btnMcpApply.setOnClickListener { applyMcpPort(force = true) }
+
+        // 上次开着就自动接着跑（进程被系统杀掉后，重新打开 App 会恢复）。
+        if (enabled && !mcpServer.isRunning) {
+            startMcp(showToast = false)
+        }
+    }
+
+    private fun setMcpControlsEnabled(enabled: Boolean) {
+        b.swMcpLan.isEnabled = enabled
+        b.etMcpPort.isEnabled = enabled
+    }
+
+    private fun startMcp(showToast: Boolean): Boolean {
+        val port = b.etMcpPort.text.toString().trim().toIntOrNull()
+        if (port == null || port !in 1024..65535) {
+            failMcp("端口要在 1024–65535 之间")
+            return false
+        }
+
+        val lan = b.swMcpLan.isChecked
+        return try {
+            mcpServer.start(port, lan)
+            prefs.edit()
+                .putBoolean(KEY_MCP_ENABLED, true)
+                .putBoolean(KEY_MCP_LAN, lan)
+                .putInt(KEY_MCP_PORT, port)
+                .apply()
+            b.etMcpPort.setText(port.toString())
+            updateMcpStatus()
+            if (showToast) toast("MCP 服务已启动")
+            true
+        } catch (e: Exception) {
+            failMcp("启动失败：${e.message ?: "端口可能被占用"}")
+            false
+        }
+    }
+
+    private fun applyMcpPort(force: Boolean) {
+        val raw = b.etMcpPort.text.toString().trim()
+        val newPort = raw.toIntOrNull()
+        val saved = prefs.getInt(KEY_MCP_PORT, McpHttpServer.DEFAULT_PORT)
+
+        if (newPort == null || newPort !in 1024..65535) {
+            toast("端口要在 1024–65535 之间", long = true)
+            b.etMcpPort.setText(saved.toString())
+            return
+        }
+        if (newPort == saved) {
+            if (force) toast(if (mcpServer.isRunning) "端口没变" else "端口已保存")
+            return
+        }
+
+        prefs.edit().putInt(KEY_MCP_PORT, newPort).apply()
+        if (mcpServer.isRunning || b.swMcpEnabled.isChecked) {
+            startMcp(showToast = true)
+        } else {
+            updateMcpStatus()
+            if (force) toast("端口已保存")
+        }
+    }
+
+    /** 启动失败时把开关复位，别让界面显示「开」而实际没跑。 */
+    private fun failMcp(message: String) {
+        mcpServer.stop()
+        prefs.edit().putBoolean(KEY_MCP_ENABLED, false).apply()
+        mcpUiUpdating = true
+        b.swMcpEnabled.isChecked = false
+        mcpUiUpdating = false
+        setMcpControlsEnabled(false)
+        updateMcpStatus()
+        toast(message, long = true)
+    }
+
+    private fun updateMcpStatus() {
+        if (!mcpServer.isRunning) {
+            b.tvMcpStatus.text = getString(R.string.mcp_status_off)
+            b.tvMcpStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            return
+        }
+
+        b.tvMcpStatus.setTextColor(ContextCompat.getColor(this, R.color.accent))
+        if (!mcpServer.lan) {
+            b.tvMcpStatus.text =
+                getString(R.string.mcp_status_running, mcpServer.endpoint("127.0.0.1"))
+            return
+        }
+
+        val ip = localIpv4()
+        b.tvMcpStatus.text = if (ip == null) {
+            getString(R.string.mcp_status_lan_no_ip)
+        } else {
+            getString(R.string.mcp_status_running, mcpServer.endpoint(ip))
+        }
+    }
+
+    /** 找本机局域网 IPv4，用来在设置里显示可复制的地址。不需要权限。 */
+    private fun localIpv4(): String? = try {
+        Collections.list(NetworkInterface.getNetworkInterfaces())
+            .asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { Collections.list(it.inetAddresses).asSequence() }
+            .filterIsInstance<Inet4Address>()
+            .firstOrNull { it.isSiteLocalAddress }
+            ?.hostAddress
+    } catch (e: Exception) {
+        null
     }
 
     // -----------------------------------------------------------------------
@@ -603,5 +762,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS = "laya_decide_prefs"
         private const val KEY_MODE = "backend_mode"
+        private const val KEY_MCP_ENABLED = "mcp_enabled"
+        private const val KEY_MCP_LAN = "mcp_lan"
+        private const val KEY_MCP_PORT = "mcp_port"
     }
 }

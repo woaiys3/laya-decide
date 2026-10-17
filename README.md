@@ -28,8 +28,8 @@
 一个非自回归的 System 1 决策模型：它不生成文字，而是在一次前向传播里对"带类型的问题"
 直接给出概率化答案。
 
-同一套模型也能通过**本地 MCP 服务**给 AI 客户端用，让 AI 自己来问你这个问题 ——
-见下文「给 AI 用：本地 MCP 服务」。
+同一套模型也能通过 **MCP 服务**给 AI 客户端用（手机 App 内置，或电脑端 stdio），
+让 AI 自己来问你这个问题 —— 见下文「给 AI 用：MCP 服务」。
 
 ---
 
@@ -135,24 +135,46 @@ App 会自动按这个顺序找：
 
 ---
 
-## 给 AI 用：本地 MCP 服务
+## 给 AI 用：MCP 服务
 
-`server/mcp.mjs` 把这套判断能力做成了一个本地 [MCP](https://modelcontextprotocol.io) 服务：
-Claude Desktop / Cursor / Cherry Studio 这类客户端配一行就能调用，让 AI 在回答
-「我该不该…」时真的跑一次模型，而不是自己瞎猜。
+把这套判断能力做成 [MCP](https://modelcontextprotocol.io) 服务：Claude Desktop / Cursor /
+Cherry Studio 这类客户端配一下就能调用，让 AI 在回答「我该不该…」时真的跑一次模型。
+两种跑法，任选其一。
 
-服务走 **stdio**，只在本地跑，不开端口、不上传任何东西。
+### 方式一：手机当 MCP 服务（局域网，默认关闭）
 
-### 准备
+App 设置面板最下面有一节「MCP 服务」：
+
+1. 打开「启用 MCP 服务」
+2. 需要电脑访问时，再打开「允许局域网访问」（关掉时只绑 `127.0.0.1`）
+3. 端口默认 **8940**，可以改，点「应用」生效
+
+状态行会显示实际地址，比如 `http://192.168.1.23:8940/mcp`。客户端配置：
+
+```json
+{
+  "mcpServers": {
+    "laya-phone": { "url": "http://192.168.1.23:8940/mcp" }
+  }
+}
+```
+
+- **默认关闭**，开关关掉就完全不会监听端口。
+- 没有鉴权，只在你信任的局域网里开；别把端口映射到公网。
+- App 要保持运行；进程被系统杀掉后，重新打开 App 会自动恢复。
+- MCP 始终走端侧模型（和 App 里选的「演示模式」无关）；模型没下载时 `decide` 会返回可读的错误。
+- 只支持 Streamable HTTP（2025-03-26 及以后），不提供旧的 SSE 传输。
+
+### 方式二：电脑端 stdio（`server/mcp.mjs`）
+
+不想让手机一直开着、或电脑上更方便时用这个：
 
 ```powershell
 cd D:\laya\server
 npm install            # 装 MCP SDK
 cd ..
-.\fetch-model.ps1      # 如果还没下模型：262MB，MCP 默认用真实 int4 模型
+.\fetch-model.ps1      # 如果还没下模型：262MB
 ```
-
-### 配置客户端
 
 Claude Desktop（Windows，`%APPDATA%\Claude\claude_desktop_config.json`）：
 
@@ -169,24 +191,16 @@ Claude Desktop（Windows，`%APPDATA%\Claude\claude_desktop_config.json`）：
 
 Cursor（`.cursor/mcp.json`）或 Cherry Studio 用同样的结构。
 
-### 它暴露两个工具
+默认 `LAYA_MODE=auto`：有模型就用真实 int4 模型，没有就退到演示模式。
+也可以用 `$env:LAYA_MODE = "real"` / `"mock"` 强制切换。首次调用会加载模型（约 6 秒），
+模型文件不在时**不会偷偷下载 262MB**，而是报错让你先跑 `fetch-model.ps1`。
+
+### 两个工具（两种方式一致）
 
 | 工具 | 作用 |
 |---|---|
 | `decide` | 给情境和 2–20 个选项，返回排序 + 推荐 + 分差；参数不合法时返回可读的错误 |
-| `list_backends` | 报告当前是真实模型还是演示模式、模型在不在（不会加载、不会下载） |
-
-### 模式
-
-默认 `LAYA_MODE=auto`：有模型就用真实 int4 模型，没有就退到演示模式。
-
-```powershell
-$env:LAYA_MODE = "real"   # 强制真实模型；模型缺失时给出清晰的错误
-$env:LAYA_MODE = "mock"   # 强制演示模式，秒回
-```
-
-> 真实模式首次调用会加载模型（约 6 秒），之后每次 100ms–1s。
-> 模型文件不在时**不会偷偷下载 262MB**，而是报错让你先跑 `fetch-model.ps1`。
+| `list_backends` | 报告当前用的是真实模型还是演示模式、模型在不在（不会加载、不会下载） |
 
 **还是那句话**：这是未微调的基座模型，判断力有限。MCP 工具的描述和返回文本里
 都带着同样的提醒，AI 应该把结果当参考，而不是结论。
@@ -261,6 +275,7 @@ laya-decide\
         │   │   │   └── Json.kt             极简 JSON 解析（为了 JVM 可测）
         │   │   ├── core\                   决策逻辑（纯 Kotlin，不依赖 Android）
         │   │   ├── backend\                后端抽象 + 端侧/演示两种实现
+        │   │   ├── mcp\McpHttpServer.kt    App 内置 MCP 服务（HTTP，设置里开关）
         │   │   └── data\HistoryStore.kt    SQLite 历史
         │   └── res\
         └── test\                          50 个 JVM 单测
