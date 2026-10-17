@@ -1,7 +1,7 @@
 # 交接文档
 
 > 写给下一个接手的人（或下一个上下文窗口里的我）。
-> 最初：2026-10-03，提交 `73af891`；**2026-10-17 更新：三件事做完两件半**。
+> 最初：2026-10-03，提交 `73af891`；**2026-10-17 更新：旧任务做完 + MCP 增强 + 1.1 换签名**。
 >
 > **先读第一节：那里原本是三件待办，现在标了完成状态。** 只剩「任务 3-B（放宽 max_len）」
 > 和「arm64 真机验证」——两件都需要 arm64 真机，本机只有 x86_64 模拟器，所以没硬做。
@@ -19,6 +19,7 @@
 | 2 · 加本地 MCP 服务 | ✅ 完成 | `30e2bb3` |
 | 3 · 字数上限诚实对齐（方案 A） | ✅ 完成 | `c1574be` |
 | 4 · App 内置 MCP 服务（开关/端口/局域网） | ✅ 完成 | `b7fc918` |
+| 5 · 1.1：地址复制 / 通知保活 / 新签名密钥 | ✅ 完成 | `5ad503e` |
 | 3-B · 放宽 `max_len` 到 1024 | ⏸ 未做（需真机实测） | — |
 | arm64 真机推理验证 | ⏸ 仍未验证 | — |
 
@@ -37,7 +38,10 @@
 > App 设置里新增「MCP 服务」：启用开关、允许局域网访问、端口（默认 **8940**），
 > **默认关闭**。手机端走 Streamable HTTP（`POST /mcp`，不提供 SSE），始终用端侧模型；
 > 局域网开关关掉时只绑 `127.0.0.1`，打开才绑 `0.0.0.0`。没有鉴权，界面里已写明。
-> 不做前台 Service —— App 进程被杀服务就停，重新打开 App 会按保存的开关自动恢复。
+>
+> **1.1（`5ad503e`）起**：地址可以一键/长按复制；开启后由**前台 Service**在通知栏常驻保活
+> （带「停止」动作，Android 13+ 会申请通知权限），切后台也能继续调；8.0+ 的 FGS 类型是
+> `dataSync`。别从最近任务里把 App 划掉。
 
 ---
 
@@ -421,13 +425,14 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 | 单元测试 | ✅ Android 50 + PC 核心 21 + MCP 5，全过 |
 | 两种后端 | ✅ 端侧 / 演示模式 均实测（PC 服务已删） |
 | MCP 服务 | ✅ 电脑端 stdio + App 内置 HTTP，均用官方 Client 实测 |
+| MCP 保活 | ✅ 前台 Service + 常驻通知，App 切后台后仍能调 |
 | 字数上限 | ✅ 背景 300 / 选项 85，计数与硬上限已在模拟器验证 |
-| Release 签名 | ✅ apksigner 验签通过 |
+| Release 签名 | ✅ 1.1 用新密钥签，apksigner 验签通过 |
 | ABI 拆包 | ✅ 133MB → 34.9MB |
 | GitHub 仓库 | ✅ 138 个 tree 条目，密钥确认未上传 |
 | Release 附件 | ⚠️ 仍是旧代码的 v1.0.0，这批改动**还没发版** |
 
-**版本**：`versionCode 1` / `versionName "1.0"`
+**版本**：`versionCode 2` / `versionName "1.1"`
 
 仓库：https://github.com/woaiys3/laya-decide
 发行版：https://github.com/woaiys3/laya-decide/releases/tag/v1.0.0
@@ -436,6 +441,29 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 > ⚠️ 仓库可能被别人动过。我最后一次推送时发现远程有 2 个不是我提交的 commit
 > （`docs(README):` 风格，加了又删了 dshaa.xin 的链接，净变化为零）。
 > **推之前先 `git fetch`，不要强推。**
+
+### 签名密钥（**别弄丢**）
+
+> 1.1 起不再用演示密钥，换成 2026-10-17 新生成的 release 密钥。
+
+| 项 | 值 |
+|---|---|
+| keystore | `app/laya-release.jks`（PKCS12、RSA 4096、有效期 10000 天） |
+| alias | `laya-release` |
+| 证书 SHA-256 | `97:22:3B:12:21:F2:86:18:1C:CD:58:D0:1C:11:6D:04:1D:3B:B2:AB:7B:F5:9E:77:0F:2D:C2:55:35:CD:5E:49` |
+| 口令 | `app/keystore.properties`（**已被 .gitignore 排除**，不在 git 里） |
+| 桌面备份 | `C:\Users\Administrator\Desktop\Laya签名密钥备份\`（keystore + properties + 说明.txt） |
+
+⚠️ 密钥或口令丢了，就再也无法用同一签名更新这个 App，只能换包名或让用户卸载重装。
+**keystore 和 properties 都不要提交、不要外传。** 换电脑前先把桌面备份整个带走。
+
+旧的 `app/laya-decide.jks`（演示密钥，签过 v1.0.0 及以前）还留着，但新构建已经不用它。
+因为签名变了，**从 v1.0.0 升级必须先卸载旧版**（会清掉历史记录和 App 内下载的模型，
+模型重下即可）。第一次安装 1.1 的用户不受影响。
+
+1.1 的 arm64 包（本地构建，未发版）：
+`C:\Users\Administrator\Desktop\抉择-1.1-arm64.apk`
+（34.94 MB，SHA256 `ee8200c52fb25c8d849b628ad25c2dbf75b79b372314d9346b904e74f7f3854c`）
 
 ---
 
@@ -553,7 +581,10 @@ D:\laya\
     │   ├── agent\ModelFiles.kt       模型查找/下载
     │   ├── tokenizer\Tokenizer.kt    ByteLevel BPE 的 Kotlin 移植
     │   ├── backend\InferenceBackend.kt  后端抽象（端侧 / 演示两种）
-    │   ├── mcp\McpHttpServer.kt        App 内置 MCP 服务（HTTP，设置里开关）
+    │   ├── mcp\
+    │   │   ├── McpHttpServer.kt          MCP HTTP 服务（JSON-RPC / 工具）
+    │   │   ├── McpForegroundService.kt   通知保活 + 通知里的「停止」
+    │   │   ├── McpPrefs.kt / McpNetwork.kt
     │   └── core\DecisionEngine.kt    打分→排序逻辑 + 字数上限常量
     └── test\                         50 个单测（含逐 id 夹具比对）
 ```
