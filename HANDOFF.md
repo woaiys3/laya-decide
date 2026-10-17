@@ -3,15 +3,15 @@
 > 写给下一个接手的人（或下一个上下文窗口里的我）。
 > 最初：2026-10-03，提交 `73af891`；**2026-10-17 更新：旧任务做完 + MCP 增强 + 1.1 换签名**。
 >
-> **先读第一节：那里原本是三件待办，现在标了完成状态。** 只剩「任务 3-B（放宽 max_len）」
-> 和「arm64 真机验证」——两件都需要 arm64 真机，本机只有 x86_64 模拟器，所以没硬做。
+> **先读第一节：那里原本是三件待办，现在标了完成状态。** 只剩「任务 3-B（放宽 max_len）」，
+> 要 arm64 真机实测质量和耗时，暂时没做；其余都验证过了。
 > 第二节之后是背景资料，遇到具体问题时再查。
 
 ---
 
 # 第一节 · 你的任务
 
-## 状态（2026-10-17，本地 commit，**未推送**）
+## 状态（2026-10-17，已推送 `origin/main`，打 tag `v1.1.0` 并发布）
 
 | 任务 | 状态 | commit |
 |---|---|---|
@@ -21,7 +21,7 @@
 | 4 · App 内置 MCP 服务（开关/端口/局域网） | ✅ 完成 | `b7fc918` |
 | 5 · 1.1：地址复制 / 通知保活 / 新签名密钥 | ✅ 完成 | `5ad503e` |
 | 3-B · 放宽 `max_len` 到 1024 | ⏸ 未做（需真机实测） | — |
-| arm64 真机推理验证 | ⏸ 仍未验证 | — |
+| arm64 真机推理验证 | ✅ 用户真机实测通过（1.1） | — |
 
 > ⚠️ **任务 2 和原计划有一处偏差，必须知道**：`inference.mjs` 里的 `RealBackend`
 > 走的是 `@receptron/laya`，默认要下载 **1.7 GB fp32 bundle**（本机
@@ -429,13 +429,14 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 | 字数上限 | ✅ 背景 300 / 选项 85，计数与硬上限已在模拟器验证 |
 | Release 签名 | ✅ 1.1 用新密钥签，apksigner 验签通过 |
 | ABI 拆包 | ✅ 133MB → 34.9MB |
-| GitHub 仓库 | ✅ 138 个 tree 条目，密钥确认未上传 |
-| Release 附件 | ⚠️ 仍是旧代码的 v1.0.0，这批改动**还没发版** |
+| GitHub 仓库 | ✅ 已推送 `main` + tag `v1.1.0`，密钥确认未上传 |
+| Release 附件 | ✅ v1.1.0：arm64 / v7a / universal / x86_64 + SHA256SUMS |
 
 **版本**：`versionCode 2` / `versionName "1.1"`
 
 仓库：https://github.com/woaiys3/laya-decide
-发行版：https://github.com/woaiys3/laya-decide/releases/tag/v1.0.0
+发行版：https://github.com/woaiys3/laya-decide/releases/tag/v1.1.0
+旧版：https://github.com/woaiys3/laya-decide/releases/tag/v1.0.0
 本地：`D:\laya`（桌面副本：`C:\Users\Administrator\Desktop\Laya决策助手\`）
 
 > ⚠️ 仓库可能被别人动过。我最后一次推送时发现远程有 2 个不是我提交的 commit
@@ -461,23 +462,24 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 因为签名变了，**从 v1.0.0 升级必须先卸载旧版**（会清掉历史记录和 App 内下载的模型，
 模型重下即可）。第一次安装 1.1 的用户不受影响。
 
-1.1 的 arm64 包（本地构建，未发版）：
-`C:\Users\Administrator\Desktop\抉择-1.1-arm64.apk`
-（34.94 MB，SHA256 `ee8200c52fb25c8d849b628ad25c2dbf75b79b372314d9346b904e74f7f3854c`）
+1.1 的 arm64 包已发布在 v1.1.0 Release：
+`app-arm64-v8a-release.apk`（36,637,195 字节，SHA256
+`ee8200c52fb25c8d849b628ad25c2dbf75b79b372314d9346b904e74f7f3854c`）。
+桌面也留了一份：`C:\Users\Administrator\Desktop\抉择-1.1-arm64.apk`。
 
 ---
 
-# 第四节 · 唯一未验证的高风险项
+# 第四节 · 原来的高风险项（已验证）
 
-**arm64 真机的端侧推理从没跑过。** 手上只有 x86_64 模拟器。
+**arm64 真机的端侧推理：✅ 1.1 已由用户真机实测通过**（端侧推理 + MCP）。
 
-如果用户报"闪退"或"卡在加载中"，第一件事：
+如果以后用户又报“闪退”或“卡在加载中”，第一件事：
 
 ```
 adb logcat -s LayaModel:* AndroidRuntime:E
 ```
 
-Release 说明里已如实写明这一点。
+以后发新包时，仍建议先在真机上做一次冒烟（模拟器覆盖不到 arm64 的 ONNX Runtime 原生库）。
 
 ---
 
