@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import android.text.Editable
+import android.text.InputFilter
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity() {
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
         setupInitialOptions()
+        setupSituationInput()
         setupSettings()
         wireButtons()
 
@@ -127,6 +129,45 @@ class MainActivity : AppCompatActivity() {
         repeat(3) { addOptionRow() }
     }
 
+    /**
+     * 情境输入：硬上限 + 实时计数。
+     *
+     * 模型只读得到约 314 个中文字，所以输入框直接卡在 300 ——
+     * 宁可写不进去，也不要让用户以为写了 1200 字模型就看到了 1200 字。
+     */
+    private fun setupSituationInput() {
+        val limit = DecisionEngine.SITUATION_CHAR_LIMIT
+        b.etSituation.filters = arrayOf(InputFilter.LengthFilter(limit))
+        b.tvSituationNote.text = getString(
+            R.string.situation_limit_note,
+            limit,
+            DecisionEngine.OPTION_CHAR_LIMIT,
+        )
+
+        b.etSituation.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, c: Int, d: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, c: Int, d: Int) = Unit
+            override fun afterTextChanged(s: Editable?) = updateSituationCount()
+        })
+
+        updateSituationCount()
+    }
+
+    private fun updateSituationCount() {
+        val len = b.etSituation.text.length
+        val limit = DecisionEngine.SITUATION_CHAR_LIMIT
+        b.tvSituationCount.text = getString(R.string.situation_count, len, limit)
+
+        // 快写满时变色，提示用户该收尾了。
+        val nearLimit = len >= limit - 20
+        b.tvSituationCount.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (nearLimit) R.color.accent else R.color.text_secondary,
+            ),
+        )
+    }
+
     private fun addOptionRow(text: String = "") {
         if (optionRows.size >= DecisionEngine.MAX_OPTIONS) {
             toast("最多 ${DecisionEngine.MAX_OPTIONS} 个选项")
@@ -134,6 +175,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         val row = RowOptionBinding.inflate(LayoutInflater.from(this), b.llOptions, false)
+        // 选项上限同理：超过 85 字的部分模型看不到，直接不让输入。
+        row.etOption.filters = arrayOf(InputFilter.LengthFilter(DecisionEngine.OPTION_CHAR_LIMIT))
+        row.etOption.hint = getString(R.string.hint_option_limit, DecisionEngine.OPTION_CHAR_LIMIT)
         row.etOption.setText(text)
 
         // 文本变化时刷新计数，让用户看到自己填了几个。

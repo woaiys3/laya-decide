@@ -73,6 +73,30 @@
             android:textColorHint="@color/text_secondary"
             android:textSize="15sp" />
 
+        <!-- 字数说明 + 实时计数：模型只看得到前 300 字，不能让用户以为写多少都行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvSituationNote"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvSituationCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
         <!-- 选项 -->
         <LinearLayout
             android:layout_width="match_parent"

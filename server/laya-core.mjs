@@ -16,11 +16,24 @@ export const SCORE_CRITERIA = [
 
 export const MAX_SCORE = SCORE_CRITERIA.length - 1; // 3
 
-/** 英文检查点 state 截断在 512 token，留出余量。 */
-export const SITUATION_CHAR_LIMIT = 1200;
+/**
+ * 背景字数上限 —— 按模型真实预算量出来的，不是拍脑袋。
+ *
+ * 512 token 上下文里，固定开销（[CLS] + 问题头 + [SEP] + 4 个档位 + [SEP]）
+ * 约 102 token，留给背景 409 token；中文实测 1 token ≈ 0.76 字
+ * （见 tools/measure-limits.mjs），也就是约 314 字。取 300 留一点余量。
+ *
+ * 之前是 1200 —— UI 让写 1200，模型只读前 314 字，剩下 74% 被静默丢掉。
+ */
+export const SITUATION_CHAR_LIMIT = 300;
 
-/** 单个选项的 token 预算（head_max_len=192），保守按字符估。 */
-export const OPTION_CHAR_LIMIT = 60;
+/**
+ * 单个选项的字数上限。
+ *
+ * 选项文字进「问题头」，预算 = head_max_len(192) - 档位(72) = 120 token。
+ * 实测 85 字选项 ≈ 107 token，装得下；100 字就会被截断。
+ */
+export const OPTION_CHAR_LIMIT = 85;
 
 /** 模型自己建议单个 choice 问题不超过约 20 个选项。 */
 export const MAX_OPTIONS = 20;

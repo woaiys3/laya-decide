@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Tokenizer } from '@huggingface/tokenizers';
 import { EN_DIR, requireTokenizer } from './paths.mjs';
+import { OPTION_CHAR_LIMIT, SITUATION_CHAR_LIMIT } from '../laya-core.mjs';
 
 requireTokenizer();
 
@@ -74,13 +75,18 @@ console.log('');
 const maxChars = Math.floor(b.room * charsPerToken);
 console.log('=== 结论：背景 ===');
 console.log(`  实际能进模型   : 约 ${b.room} tokens ≈ ${maxChars} 个中文字`);
-console.log(`  当前 UI 上限   : 1200 字`);
-if (1200 > maxChars) {
-  const dropped = 1200 - maxChars;
-  console.log(`  ⚠️ 超出部分被静默丢弃: 约 ${dropped} 字（${Math.round((dropped / 1200) * 100)}%）`);
+console.log(`  当前 UI 上限   : ${SITUATION_CHAR_LIMIT} 字`);
+if (SITUATION_CHAR_LIMIT > maxChars) {
+  const dropped = SITUATION_CHAR_LIMIT - maxChars;
+  console.log(
+    `  ❌ UI 上限比模型能读的多 ${dropped} 字（${Math.round((dropped / SITUATION_CHAR_LIMIT) * 100)}% 会被静默丢弃）`,
+  );
+} else {
+  console.log(`  ✅ UI 上限没有超过模型能读的量（余量 ${maxChars - SITUATION_CHAR_LIMIT} 字）`);
 }
 console.log('');
 
+const optionNeed = enc(`score question: 面对上述情境，选择「${'选'.repeat(OPTION_CHAR_LIMIT)}」有多好？`).length;
 console.log('=== 结论：选项 ===');
 console.log(
   `  选项文字进「问题头」，其预算 = head_max_len(${cfg.head_max_len}) - 档位(${b.optLen}) = ${b.headBudget} tokens`,
@@ -92,7 +98,9 @@ for (const n of [20, 40, 60, 80, 85, 100, 120]) {
     `  ${String(n).padStart(3)} 字选项 → 问题头需 ${String(need).padStart(3)} tokens  ${ok ? '✅ 装得下' : '❌ 会被截断'}`,
   );
 }
-console.log(`  当前 UI 上限   : 60 字  → 还算保守，理论上可放到约 85 字`);
+console.log(
+  `  当前 UI 上限   : ${OPTION_CHAR_LIMIT} 字（需 ${optionNeed} tokens，${optionNeed <= b.headBudget ? '✅ 装得下' : '❌ 会被截断'}）`,
+);
 console.log('');
 
 // 如果换成 1024 上下文的 checkpoint

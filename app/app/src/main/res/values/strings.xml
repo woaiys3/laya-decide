@@ -4,9 +4,12 @@
 
     <string name="section_situation">情境</string>
     <string name="hint_situation">把背景写清楚。比如：我拿到一个创业公司 offer，薪资降 30%，但有期权和很大话语权。现在在大厂做螺丝钉，房贷压力不小。</string>
+    <string name="situation_count">已写 %1$d / %2$d 字</string>
+    <string name="situation_limit_note">模型上下文有限：背景最多 %1$d 字，每个选项最多 %2$d 字；写不下请只保留关键约束。</string>
 
     <string name="section_options">选项</string>
     <string name="hint_option">填一个选项</string>
+    <string name="hint_option_limit">填一个选项（最多 %1$d 字）</string>
     <string name="btn_add_option">＋ 加一个选项</string>
 
     <string name="btn_decide">让 Laya 帮我选</string>
