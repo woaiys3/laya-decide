@@ -13,8 +13,8 @@
 > | 分词器逐 id 夹具 | ✅ 64/64 一致（中文、emoji、特殊 token、空白边界） |
 > | 序列构造逐 id 夹具 | ✅ 8 场景全一致（含 max_len 截断与 head 预算收缩） |
 > | 单元测试 | ✅ 50/50 通过（JVM，无需模拟器） |
-> | PC 服务单测 | ✅ 21/21 通过 |
-> | 三种后端 | ✅ 端侧 / PC 服务 / 演示模式均实测可用 |
+> | PC 侧核心逻辑单测 | ✅ 21/21 通过（`laya-core.mjs`，MCP 复用同一套） |
+> | 两种后端 | ✅ 端侧 / 演示模式均实测可用 |
 > | Release 签名 | ✅ apksigner 验签通过 |
 
 ---
@@ -165,48 +165,7 @@ Laya 有三种提问原语。最直觉的做法是直接用 `choice` 多选一�
 
 ---
 
-## 五、接口协议（PC 服务模式用）
-
-### `GET /health`
-
-```json
-{ "ok": true, "mode": "mock", "model": null }
-```
-
-### `POST /decide`
-
-请求：
-
-```json
-{
-  "situation": "我拿到一个创业公司 offer，薪资降 30%……",
-  "options": ["留在现在的大厂", "接受这个 offer", "继续面其他公司"]
-}
-```
-
-响应：
-
-```json
-{
-  "ok": true,
-  "mode": "mock",
-  "decision": {
-    "ranked": [
-      { "option": "接受这个 offer", "score": 1.59, "normalized": 0.53, "confidence": 0.014 }
-    ],
-    "pick": "接受这个 offer",
-    "margin": 0.21,
-    "marginLabel": "胶着",
-    "closeCall": true,
-    "note": "……"
-  },
-  "usage": { "inputTokens": 267, "latencyMs": 3 }
-}
-```
-
----
-
-## 六、下一步可以做什么
+## 五、下一步可以做什么
 
 按性价比排序：
 

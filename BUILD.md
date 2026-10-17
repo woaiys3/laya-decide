@@ -112,12 +112,12 @@ App 会自动在这些位置找模型：
 
 ```powershell
 $env:ANDROID_HOME = "C:\Android"
-& C:\Android\emulator\emulator.exe -avd dsh-test30 -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
+& C:\Android\emulator\emulator.exe -avd dsh-test30 -no-snapshot -no-audio -no-boot-anim -gpu guest
 ```
 
 用 `-no-window` 也能正常截图（`adb shell screencap` 不受影响），所以自动化验证不必把窗口弹出来。
 
-**模拟器里连 PC 服务要用 `10.0.2.2`，不是 `127.0.0.1`** —— 后者的 `localhost` 是模拟器自己。
+> 必须用 `-gpu guest`。`swiftshader_indirect` 缺 `opengl32sw.dll` 会直接崩，`auto` 时好时坏。
 
 模拟器上的性能参考（x86_64、软件渲染，属于最慢的情况）：
 
@@ -149,8 +149,7 @@ $adb = "C:\Android\platform-tools\adb.exe"
 |---|---|
 | `situation` | 情境描述 |
 | `options` | 选项，用 `\|` 分隔（竖线在设备端 shell 里有含义，必须转义） |
-| `mode` | `demo` / `http` / `local` |
-| `server` | PC 服务地址（仅 http 模式用） |
+| `mode` | `demo` / `local` |
 | `decide` | 传 `true` 则启动后自动触发一次决策 |
 
 这个入口只在 `BuildConfig.DEBUG` 为真时生效，**release 包里是关掉的**（已验证）。

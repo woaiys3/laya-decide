@@ -202,14 +202,6 @@
                     android:textSize="14sp" />
 
                 <RadioButton
-                    android:id="@+id/rbHttp"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/backend_http"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp" />
-
-                <RadioButton
                     android:id="@+id/rbLocal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -217,31 +209,6 @@
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
             </RadioGroup>
-
-            <EditText
-                android:id="@+id/etServer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_btn_outline"
-                android:hint="@string/hint_server"
-                android:inputType="textUri"
-                android:padding="11dp"
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_secondary"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/btnTest"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_btn_outline"
-                android:gravity="center"
-                android:paddingVertical="11dp"
-                android:text="@string/btn_test"
-                android:textColor="@color/accent"
-                android:textSize="14sp" />
 
             <!-- 端侧模型区 -->
             <View

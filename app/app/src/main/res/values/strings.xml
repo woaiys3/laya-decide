@@ -14,17 +14,13 @@
     <string name="btn_settings">设置</string>
     <string name="btn_clear">清空</string>
     <string name="btn_delete">删除</string>
-    <string name="btn_test">测试连接</string>
     <string name="btn_cancel">取消</string>
 
     <string name="section_result">结果</string>
     <string name="settings_title">设置</string>
 
     <string name="label_backend">推理后端</string>
-    <string name="label_server">服务地址</string>
-    <string name="hint_server">例如 192.168.1.5:8931</string>
     <string name="backend_demo">演示模式（本地，非 AI）</string>
-    <string name="backend_http">PC 服务（局域网）</string>
     <string name="backend_local">端侧模型（完全离线）</string>
 
     <string name="note_demo">演示模式：分数由本地启发式算出，只为让你先看流程，不是真实推理。想要真实（但同样不靠谱的）效果请选「端侧模型」。</string>
@@ -67,10 +63,6 @@
     <string name="scale_caveat">这些选项的分数几乎没有差别（最高 %1$.2f，满分 %2$.2f）。这不代表"它们一样好"，而是模型没有分辨出高低 —— 换个说法问它，排序可能就变了。请把下面的名次当参考，别当结论。</string>
 
     <string name="model_note">纯属娱乐：这模型的判断力有限，结果别当真，尤其别拿它做重大决定。</string>
-
-    <string name="testing">正在测试…</string>
-    <string name="test_ok">连接成功｜模式：%1$s</string>
-    <string name="test_fail">连不上：%1$s</string>
 
     <string name="history_title">历史记录（点击载入）</string>
     <string name="history_empty">还没有历史记录。</string>

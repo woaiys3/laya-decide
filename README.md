@@ -121,12 +121,11 @@ App 会自动按这个顺序找：
 
 ---
 
-## 三种后端
+## 两种后端
 
 | 模式 | 说明 | 需要什么 |
 |---|---|---|
 | **端侧模型** | 真实 Laya 跑在手机上，完全离线 | 模型文件（262MB） |
-| PC 服务 | 把推理放到电脑上，手机通过局域网调用 | 电脑跑 `server/server.mjs` |
 | 演示模式 | 纯本地启发式打分，**不是 AI** | 什么都不用 |
 
 演示模式的存在是为了让你在下载模型之前就能看清界面和流程。App 里会明确标注它不是真实推理。
@@ -169,8 +168,8 @@ laya-decide\
 ├── reference\              ← 模型与分词器（**不在仓库里**，由 fetch-model.ps1 生成）
 ├── screenshots\            ← 模拟器实测截图
 │
-├── server\                 ← PC 端推理服务（可选）+ 全部验证工具
-│   ├── server.mjs
+├── server\                 ← 本地 MCP 服务 + 全部验证工具
+│   ├── mcp.mjs
 │   ├── laya-core.mjs
 │   ├── inference.mjs
 │   ├── test\core.test.mjs
@@ -198,7 +197,7 @@ laya-decide\
         │   │   │   ├── Tokenizer.kt        ByteLevel BPE 的 Kotlin 移植
         │   │   │   └── Json.kt             极简 JSON 解析（为了 JVM 可测）
         │   │   ├── core\                   决策逻辑（纯 Kotlin，不依赖 Android）
-        │   │   ├── backend\                后端抽象 + 三种实现
+        │   │   ├── backend\                后端抽象 + 端侧/演示两种实现
         │   │   └── data\HistoryStore.kt    SQLite 历史
         │   └── res\
         └── test\                          50 个 JVM 单测

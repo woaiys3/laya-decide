@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
         setupSettings()
         wireButtons()
 
-        // 第一次用的时候把设置面板摊开，否则用户不知道要填服务地址。
+        // 第一次用的时候把设置面板摊开，否则用户不知道要选后端、下模型。
         if (history.count() == 0 && prefs.getString(KEY_MODE, null) == null) {
             b.llSettings.visibility = View.VISIBLE
         }
@@ -77,8 +77,7 @@ class MainActivity : AppCompatActivity() {
      *   adb shell am start -n com.laya.decide/.MainActivity \
      *     --es situation "我拿到一个创业公司 offer，薪资降 30%" \
      *     --es options "接受这个 offer|留在现在的大厂|继续面其他公司" \
-     *     --es mode http \
-     *     --es server 10.0.2.2:8931 \
+     *     --es mode local \
      *     --ez decide true
      *
      * options 用 | 分隔；decide 传 true 会自动触发一次决策。
@@ -94,14 +93,8 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putString(KEY_MODE, parsed.storageKey).commit()
             when (parsed) {
                 BackendMode.DEMO -> b.rbDemo.isChecked = true
-                BackendMode.HTTP -> b.rbHttp.isChecked = true
                 BackendMode.LOCAL -> b.rbLocal.isChecked = true
             }
-        }
-
-        i.getStringExtra("server")?.let { s ->
-            b.etServer.setText(s)
-            prefs.edit().putString(KEY_SERVER, s).commit()
         }
 
         i.getStringExtra("situation")?.let { s ->
@@ -195,8 +188,6 @@ class MainActivity : AppCompatActivity() {
                 if (b.llSettings.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
 
-        b.btnTest.setOnClickListener { testConnection() }
-
         b.btnClearHistory.setOnClickListener {
             history.clear()
             renderHistory()
@@ -217,7 +208,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         val mode = currentMode()
-        val server = currentServer()
 
         // 端侧模式下模型没下载就别白跑一趟，直接引导去下载。
         if (mode == BackendMode.LOCAL && !ModelFiles.isReady(this)) {
@@ -230,7 +220,7 @@ class MainActivity : AppCompatActivity() {
         setBusy(true)
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { backendFor(mode, server, this@MainActivity).decide(situation, options) }
+                runCatching { backendFor(mode, this@MainActivity).decide(situation, options) }
             }
 
             setBusy(false)
@@ -252,31 +242,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun testConnection() {
-        val server = currentServer()
-        b.btnTest.text = getString(R.string.testing)
-        b.btnTest.isEnabled = false
-
-        lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching { backendFor(BackendMode.HTTP, server, this@MainActivity).describe() }
-            }
-            b.btnTest.isEnabled = true
-            b.btnTest.text = getString(R.string.btn_test)
-
-            result.onSuccess { toast(it) }
-                .onFailure { e ->
-                    toast(
-                        getString(
-                            R.string.test_fail,
-                            (e as? BackendException)?.message ?: e.message ?: "未知错误",
-                        ),
-                        long = true,
-                    )
-                }
-        }
-    }
-
     private fun setBusy(busy: Boolean) {
         b.btnDecide.isEnabled = !busy
         b.btnDecide.text = getString(if (busy) R.string.btn_deciding else R.string.btn_decide)
@@ -288,28 +253,19 @@ class MainActivity : AppCompatActivity() {
     // -----------------------------------------------------------------------
 
     private fun setupSettings() {
-        val server = prefs.getString(KEY_SERVER, DEFAULT_SERVER).orEmpty()
-        b.etServer.setText(server)
-
         val mode = BackendMode.fromKey(prefs.getString(KEY_MODE, null))
         when (mode) {
             BackendMode.DEMO -> b.rbDemo.isChecked = true
-            BackendMode.HTTP -> b.rbHttp.isChecked = true
             BackendMode.LOCAL -> b.rbLocal.isChecked = true
         }
 
         b.rgBackend.setOnCheckedChangeListener { _: RadioGroup, checkedId: Int ->
             val picked = when (checkedId) {
-                R.id.rbHttp -> BackendMode.HTTP
                 R.id.rbLocal -> BackendMode.LOCAL
                 else -> BackendMode.DEMO
             }
             prefs.edit().putString(KEY_MODE, picked.storageKey).apply()
             refreshStatusChip()
-        }
-
-        b.etServer.setOnFocusChangeListener { _: View, hasFocus: Boolean ->
-            if (!hasFocus) saveServer()
         }
 
         b.btnDownloadModel.setOnClickListener { downloadModel() }
@@ -357,7 +313,6 @@ class MainActivity : AppCompatActivity() {
                     b.tvNote.visibility = View.GONE
                 }
             }
-            else -> b.tvNote.visibility = View.GONE
         }
     }
 
@@ -414,23 +369,11 @@ class MainActivity : AppCompatActivity() {
         else -> String.format(Locale.US, "%.0f KB", bytes / 1024.0)
     }
 
-    private fun saveServer() {
-        prefs.edit().putString(KEY_SERVER, b.etServer.text.toString().trim()).apply()
-        refreshStatusChip()
-    }
-
     private fun currentMode() = BackendMode.fromKey(prefs.getString(KEY_MODE, null))
-
-    private fun currentServer(): String {
-        // 输入框可能还没失焦，直接读输入框更准。
-        val typed = b.etServer.text.toString().trim()
-        return typed.ifEmpty { prefs.getString(KEY_SERVER, DEFAULT_SERVER).orEmpty() }
-    }
 
     private fun refreshStatusChip() {
         val label = when (currentMode()) {
             BackendMode.DEMO -> getString(R.string.backend_demo)
-            BackendMode.HTTP -> getString(R.string.backend_http)
             BackendMode.LOCAL -> getString(R.string.backend_local)
         }
         b.tvStatus.text = label
@@ -585,7 +528,6 @@ class MainActivity : AppCompatActivity() {
             val pick = e.decision.pick ?: "—"
             val modeTag = when (BackendMode.fromKey(e.modeKey)) {
                 BackendMode.DEMO -> "演示"
-                BackendMode.HTTP -> "Laya"
                 BackendMode.LOCAL -> "端侧"
             }
             row.tvMeta.text = "$pick  ·  $modeTag  ·  ${sdf.format(Date(e.time))}"
@@ -614,16 +556,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun fmt(x: Double) = String.format(Locale.US, "%.2f", x)
 
-    override fun onPause() {
-        super.onPause()
-        // 离开页面时把服务地址存下来。
-        saveServer()
-    }
-
     companion object {
         private const val PREFS = "laya_decide_prefs"
         private const val KEY_MODE = "backend_mode"
-        private const val KEY_SERVER = "server_addr"
-        private const val DEFAULT_SERVER = "192.168.1.100:8931"
     }
 }
