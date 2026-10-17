@@ -18,6 +18,7 @@
 | 1 · 删掉 PC 服务模式 | ✅ 完成 | `0ffc856` |
 | 2 · 加本地 MCP 服务 | ✅ 完成 | `30e2bb3` |
 | 3 · 字数上限诚实对齐（方案 A） | ✅ 完成 | `c1574be` |
+| 4 · App 内置 MCP 服务（开关/端口/局域网） | ✅ 完成 | `b7fc918` |
 | 3-B · 放宽 `max_len` 到 1024 | ⏸ 未做（需真机实测） | — |
 | arm64 真机推理验证 | ⏸ 仍未验证 | — |
 
@@ -31,6 +32,12 @@
 > 另：`laya-core.mjs` 里的提问措辞当时还是旧的「适配程度」版（变体 A），
 > 已经对齐 App 实际采用的「面对上述情境，选择「X」有多好？」（变体 B）。两端的
 > `buildQuestions` 现在逐字一致。
+
+> **追加（`b7fc918`）：MCP 现在有两种跑法。** 电脑端 `server/mcp.mjs`（stdio）不变；
+> App 设置里新增「MCP 服务」：启用开关、允许局域网访问、端口（默认 **8940**），
+> **默认关闭**。手机端走 Streamable HTTP（`POST /mcp`，不提供 SSE），始终用端侧模型；
+> 局域网开关关掉时只绑 `127.0.0.1`，打开才绑 `0.0.0.0`。没有鉴权，界面里已写明。
+> 不做前台 Service —— App 进程被杀服务就停，重新打开 App 会按保存的开关自动恢复。
 
 ---
 
@@ -413,7 +420,7 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 | 与参考实现一致性 | ✅ 分词器 64 条、序列构造 8 场景，**逐 token id 一致** |
 | 单元测试 | ✅ Android 50 + PC 核心 21 + MCP 5，全过 |
 | 两种后端 | ✅ 端侧 / 演示模式 均实测（PC 服务已删） |
-| MCP 服务 | ✅ `decide` / `list_backends`，mock 与真实 int4 模型均实测 |
+| MCP 服务 | ✅ 电脑端 stdio + App 内置 HTTP，均用官方 Client 实测 |
 | 字数上限 | ✅ 背景 300 / 选项 85，计数与硬上限已在模拟器验证 |
 | Release 签名 | ✅ apksigner 验签通过 |
 | ABI 拆包 | ✅ 133MB → 34.9MB |
@@ -546,6 +553,7 @@ D:\laya\
     │   ├── agent\ModelFiles.kt       模型查找/下载
     │   ├── tokenizer\Tokenizer.kt    ByteLevel BPE 的 Kotlin 移植
     │   ├── backend\InferenceBackend.kt  后端抽象（端侧 / 演示两种）
+    │   ├── mcp\McpHttpServer.kt        App 内置 MCP 服务（HTTP，设置里开关）
     │   └── core\DecisionEngine.kt    打分→排序逻辑 + 字数上限常量
     └── test\                         50 个单测（含逐 id 夹具比对）
 ```
