@@ -1,15 +1,42 @@
 # 交接文档
 
 > 写给下一个接手的人（或下一个上下文窗口里的我）。
-> 最后更新：2026-10-03，提交 `73af891`。
+> 最初：2026-10-03，提交 `73af891`；**2026-10-17 更新：三件事做完两件半**。
 >
-> **先读第一节，那是你要做的两件事。** 第二节之后是背景资料，遇到具体问题时再查。
+> **先读第一节：那里原本是三件待办，现在标了完成状态。** 只剩「任务 3-B（放宽 max_len）」
+> 和「arm64 真机验证」——两件都需要 arm64 真机，本机只有 x86_64 模拟器，所以没硬做。
+> 第二节之后是背景资料，遇到具体问题时再查。
 
 ---
 
 # 第一节 · 你的任务
 
-## 任务 1：删掉「PC 服务」模式
+## 状态（2026-10-17，本地 commit，**未推送**）
+
+| 任务 | 状态 | commit |
+|---|---|---|
+| 1 · 删掉 PC 服务模式 | ✅ 完成 | `0ffc856` |
+| 2 · 加本地 MCP 服务 | ✅ 完成 | `30e2bb3` |
+| 3 · 字数上限诚实对齐（方案 A） | ✅ 完成 | `c1574be` |
+| 3-B · 放宽 `max_len` 到 1024 | ⏸ 未做（需真机实测） | — |
+| arm64 真机推理验证 | ⏸ 仍未验证 | — |
+
+> ⚠️ **任务 2 和原计划有一处偏差，必须知道**：`inference.mjs` 里的 `RealBackend`
+> 走的是 `@receptron/laya`，默认要下载 **1.7 GB fp32 bundle**（本机
+> `~/.cache/receptron-laya` 是空的，`huggingface.co` 又不通）。所以 MCP 的真实推理
+> **没有复用它**，而是新增 `server/onnx-backend.mjs`，直接跑
+> `reference/models/model_int4.onnx` —— 和 App 同一个文件、同一套序列构造与温度校准。
+> `inference.mjs` 原样保留（`MockBackend` 仍被 MCP 的演示模式使用）。
+>
+> 另：`laya-core.mjs` 里的提问措辞当时还是旧的「适配程度」版（变体 A），
+> 已经对齐 App 实际采用的「面对上述情境，选择「X」有多好？」（变体 B）。两端的
+> `buildQuestions` 现在逐字一致。
+
+---
+
+## 任务 1：删掉「PC 服务」模式 —— ✅ 已完成（`0ffc856`）
+
+> 以下正文保留，作为「当时为什么这么改」的记录。
 
 ### 为什么
 
@@ -92,7 +119,7 @@ cd D:\laya\app
 
 ---
 
-## 任务 2：加一个本地 MCP 服务，让 AI 能用「抉择」
+## 任务 2：加一个本地 MCP 服务，让 AI 能用「抉择」 —— ✅ 已完成（`30e2bb3`）
 
 ### 为什么
 
@@ -249,7 +276,7 @@ Cursor：`.cursor/mcp.json` 同样的结构。
 
 ---
 
-## 任务 3：背景和选项"能写的字太少"的反馈
+## 任务 3：背景和选项"能写的字太少"的反馈 —— ✅ 方案 A 已完成（`c1574be`），方案 B 未做
 
 ### 反馈内容
 
@@ -339,9 +366,11 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 
 ### 建议的执行顺序
 
-1. **先做 A**（半小时，立刻消除欺骗性）
-2. **再试 B**（一小时，用实测决定 1024 能不能用）
-3. B 只要不退化，就把 A 的 300 字限制按 B 的实测结果重新放宽
+1. ✅ **A 已做**（`c1574be`）：背景 1200 → **300**、选项 60 → **85**，输入框加实时计数和硬上限，
+   UI 上写明原因。`measure-limits.mjs` 现在直接读 `laya-core` 的常量，会检查 UI 上限没超过模型预算。
+2. ⏸ **B 未做**：把 `max_len` 改到 1024 实测质量，**还要 arm64 真机测耗时**。本机只有
+   x86_64 模拟器，所以留到有真机的时候。
+3. 如果 B 被证明不退化，再按实测把背景上限放宽（1024 下约 700 字）。
 
 ### 验收
 
@@ -382,12 +411,14 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 |---|---|
 | 端侧推理 | ✅ 跑通（Android 11 模拟器 x86_64，加载约 6 秒） |
 | 与参考实现一致性 | ✅ 分词器 64 条、序列构造 8 场景，**逐 token id 一致** |
-| 单元测试 | ✅ Android 50 个 + PC 服务 21 个，全过 |
-| 三种后端 | ✅ 端侧 / PC 服务 / 演示模式 均实测（PC 服务待删） |
+| 单元测试 | ✅ Android 50 + PC 核心 21 + MCP 5，全过 |
+| 两种后端 | ✅ 端侧 / 演示模式 均实测（PC 服务已删） |
+| MCP 服务 | ✅ `decide` / `list_backends`，mock 与真实 int4 模型均实测 |
+| 字数上限 | ✅ 背景 300 / 选项 85，计数与硬上限已在模拟器验证 |
 | Release 签名 | ✅ apksigner 验签通过 |
 | ABI 拆包 | ✅ 133MB → 34.9MB |
 | GitHub 仓库 | ✅ 138 个 tree 条目，密钥确认未上传 |
-| Release 附件 | ✅ 5 个（arm64 / armv7 / universal / x86_64 / SHA256SUMS） |
+| Release 附件 | ⚠️ 仍是旧代码的 v1.0.0，这批改动**还没发版** |
 
 **版本**：`versionCode 1` / `versionName "1.0"`
 
@@ -501,19 +532,21 @@ D:\laya\
 ├── reference\           ⚠️ 不在仓库里，由 fetch-model.ps1 生成
 ├── screenshots\         22 张实测截图
 ├── server\              PC 侧代码
-│   ├── laya-core.mjs    ★ 决策逻辑，MCP 要复用
-│   ├── inference.mjs    ★ ONNX 推理，MCP 要复用
-│   ├── server.mjs       ❌ 任务 1 要删（HTTP 接口）
-│   ├── test\core.test.mjs  ✅ 保留（测 laya-core）
-│   └── tools\           12 个验证/分析工具
+│   ├── mcp.mjs          ★ MCP 入口（stdio；decide / list_backends）
+│   ├── onnx-backend.mjs ★ int4 ONNX 推理，MCP 的真实模型走这里
+│   ├── laya-core.mjs    ★ 校验 / 排序 / 决策组装（纯函数）
+│   ├── inference.mjs    MockBackend（MCP 演示模式用）+ 旧的 RealBackend
+│   ├── test\core.test.mjs   ✅ 测 laya-core
+│   ├── test\mcp.test.mjs    ✅ 真的拉起 MCP 服务自测
+│   └── tools\           15 个验证/分析工具
 └── app\app\src\
     ├── main\java\com\laya\decide\
     │   ├── agent\LayaAgent.kt        端侧 ONNX 推理（复刻参考实现）
     │   ├── agent\SequenceBuilder.kt  序列构造
     │   ├── agent\ModelFiles.kt       模型查找/下载
     │   ├── tokenizer\Tokenizer.kt    ByteLevel BPE 的 Kotlin 移植
-    │   ├── backend\InferenceBackend.kt  ★ 任务 1 要改
-    │   └── core\DecisionEngine.kt    打分→排序逻辑
+    │   ├── backend\InferenceBackend.kt  后端抽象（端侧 / 演示两种）
+    │   └── core\DecisionEngine.kt    打分→排序逻辑 + 字数上限常量
     └── test\                         50 个单测（含逐 id 夹具比对）
 ```
 
@@ -614,7 +647,7 @@ App 按这个顺序找模型：
 |---|---|
 | `situation` | 背景 |
 | `options` | 选项，用 `\|` 分隔 —— **竖线必须转义**，否则被设备端 shell 当管道 |
-| `mode` | `demo` / `local`（`http` 模式删掉后就没这个值了） |
+| `mode` | `demo` / `local`（`http` 已随 PC 服务模式删除） |
 | `decide` | `true` 则启动后自动算一次 |
 
 中文参数可以直接传，实测没问题。

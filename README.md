@@ -181,7 +181,7 @@ Cursor（`.cursor/mcp.json`）或 Cherry Studio 用同样的结构。
 默认 `LAYA_MODE=auto`：有模型就用真实 int4 模型，没有就退到演示模式。
 
 ```powershell
-$env:LAYA_MODE = "real"   # 强制真实模型；模型缺失时决定清晰的错误
+$env:LAYA_MODE = "real"   # 强制真实模型；模型缺失时给出清晰的错误
 $env:LAYA_MODE = "mock"   # 强制演示模式，秒回
 ```
 
