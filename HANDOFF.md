@@ -332,7 +332,7 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 `laya-typed-decisions`（int8 **532MB**）和 `laya-multilingual`（int8 **873MB**）
 的 `max_len` 都是 1024。但：
 - 体积从 262MB 涨到 532MB+，下载和内存都翻倍
-- typed-decisions 训的是发票/客服/安全事件，域外无收益（见第十节）
+- typed-decisions 训的是发票/客服/安全事件，域外无收益（见第十二节）
 - multilingual 是英文弱、多语言强，中文会更差
 
 **除非 B 被证伪，否则不要走这条路。**
@@ -352,6 +352,8 @@ max_len = 2048  → 背景 1945 tokens ≈ 1497 字
 
 ---
 
+
+# 第二节 · 用户的态度（必须遵守）
 
 用户最后把定位改成了**「就是个玩具」**：
 
@@ -543,7 +545,284 @@ cd ..\app
 
 ---
 
-# 第十节 · 被搁置的事（别主动捡起来）
+# 第十节 · 怎么用模拟器测试（操作手册）
+
+以下命令都在 `D:\laya` 下、PowerShell 5.1 里实测过。
+
+## 1. 启动模拟器
+
+```powershell
+& C:\Android\emulator\emulator.exe -avd dsh-test30 -no-snapshot -no-audio -no-boot-anim -gpu guest
+```
+
+- **必须 `-gpu guest`**。`-gpu swiftshader_indirect` 会因缺 `opengl32sw.dll` 直接崩，
+  `-gpu auto` 时好时坏。
+- 加 `-no-window` 也可以，`adb shell screencap` 照常工作，适合自动化。
+- 想手动操作就去掉 `-no-window`，窗口会出现在桌面上。
+
+## 2. 等它启动完
+
+```powershell
+$adb = "C:\Android\platform-tools\adb.exe"
+$deadline = (Get-Date).AddMinutes(5)
+while((Get-Date) -lt $deadline){
+  if(((& $adb shell getprop sys.boot_completed 2>&1) -join '').Trim() -eq '1'){ break }
+  Start-Sleep -Seconds 6
+}
+& $adb devices     # 应显示 emulator-5554  device
+```
+
+## 3. 编译 + 装包（注意架构！）
+
+**模拟器是 x86_64，必须装 x86_64 的包**，arm64 的装上去跑不起来。
+
+```powershell
+cd D:\laya\app
+& "D:\dsh\aibendi\.tools\gradle-8.9\bin\gradle.bat" assembleDebug
+
+& "$adb" install -r "D:\laya\app\app\build\outputs\apk\debug\app-x86_64-debug.apk"
+```
+
+签名冲突（之前装过 release）时先 `adb uninstall com.laya.decide`。
+
+## 4. 把模型推到设备
+
+```powershell
+& $adb push "D:\laya\reference\models\model_int4.onnx" /data/local/tmp/laya-model.onnx
+```
+
+或直接跑 `.\push-model.ps1`（会自动找模型、校验 md5、幂等跳过）。
+
+App 按这个顺序找模型：
+1. `/sdcard/Android/data/com.laya.decide/files/models/model_int4.onnx`
+2. `/data/data/com.laya.decide/files/models/model_int4.onnx`
+3. `/data/local/tmp/laya-model.onnx` ← adb 部署落点
+
+## 5. 驱动 App（不用手点）
+
+**只有 debug 包能用这招**（`BuildConfig.DEBUG` 保护，release 里已关闭）。
+
+```powershell
+& $adb shell am start -S -n com.laya.decide/.MainActivity `
+  --es situation "周末想出去玩，预算500，两个人，不想开车太远。" `
+  --es options "本市周边爬山\|去隔壁城市逛吃\|露营野餐" `
+  --es mode local `
+  --ez decide true
+```
+
+| 参数 | 说明 |
+|---|---|
+| `situation` | 背景 |
+| `options` | 选项，用 `\|` 分隔 —— **竖线必须转义**，否则被设备端 shell 当管道 |
+| `mode` | `demo` / `local`（`http` 模式删掉后就没这个值了） |
+| `decide` | `true` 则启动后自动算一次 |
+
+中文参数可以直接传，实测没问题。
+
+## 6. 截图
+
+```powershell
+& $adb shell screencap -p /sdcard/s.png
+& $adb pull /sdcard/s.png D:\laya\screenshots\xx.png
+```
+
+## 7. 滚动（结果区常在屏幕外）
+
+```powershell
+& $adb shell input swipe 540 1600 540 400 200    # 上滑
+& $adb shell input swipe 540 400 540 1600 200    # 下滑
+& $adb shell input keyevent 3                    # HOME
+& $adb shell input keyevent 4                    # 返回
+```
+
+## 8. 看界面文本（比截图可靠）
+
+```powershell
+& $adb shell uiautomator dump /sdcard/ui.xml
+& $adb pull /sdcard/ui.xml "$env:TEMP\ui.xml"
+[xml]$x = Get-Content "$env:TEMP\ui.xml" -Encoding UTF8
+$x.SelectNodes("//node[@text!='']") | ForEach-Object { $_.text }
+```
+
+> ⚠️ **只返回可见节点**。结果区在屏幕外时不会出现 —— 先滚动再 dump，
+> 否则会误判成"结果没渲染出来"（我踩过这个坑，白查了半天）。
+
+## 9. 看日志
+
+```powershell
+# 只看关键行
+& $adb logcat -s LayaModel:* AndroidRuntime:E
+
+# 清空后重跑
+& $adb logcat -c
+```
+
+`LayaModel` 这个 tag 会打：模型路径、大小、堆上限、ONNX 版本、加载耗时、
+以及失败时的完整异常。
+
+## 10. 关闭
+
+```powershell
+& $adb emu kill
+Start-Sleep -Seconds 6
+Get-Process emulator,qemu-system-x86_64 -EA SilentlyContinue | Stop-Process -Force
+```
+
+## 常见问题
+
+| 现象 | 原因 / 处理 |
+|---|---|
+| 启动就退出，日志有 `Failed to load opengl32sw` | 用了 `-gpu swiftshader_indirect`，换 `-gpu guest` |
+| `INSTALL_FAILED_NO_MATCHING_ABIS` | 装错架构，模拟器要 x86_64 包 |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 签名冲突，先 `adb uninstall` |
+| 结果区不显示 | 可能在屏幕外，先 swipe 再 uiautomator dump |
+| 提示"还没下载模型" | 模型没推到 `/data/local/tmp/`，或大小 < 250MB（没下完） |
+| 推理很慢 | 模拟器是软件渲染 + CPU 推理，真机会快很多 |
+
+---
+
+# 第十一节 · 怎么上传到 GitHub（操作手册）
+
+## 认证：走 SSH，不要走 HTTPS
+
+这台机器 `github.com` 的 HTTPS 被 SNI 阻断（TCP 能连、HTTP 超时），
+`git push` 走 https 会报 `Recv failure: Connection was reset`。
+**但 `api.github.com` 是通的**，所以很容易误判成"没权限"。
+
+已经配好了：
+
+```powershell
+cd D:\laya
+git remote -v      # 应该是 git@github.com:woaiys3/laya-decide.git
+ssh -T git@github.com   # 应输出 Hi woaiys3! You've successfully authenticated
+```
+
+- 密钥 `~/.ssh/id_ed25519`，已注册（key id `165273918`）
+- `~/.ssh/config` 里 `github.com` 走 22 端口；22 被封时用 `ssh.github.com:443`
+
+## 推送流程
+
+```powershell
+cd D:\laya
+git fetch origin                      # ★ 先拉！远程可能有人动过
+git log --oneline main..origin/main    # 看有没有别人的提交
+git add -A
+git status --short                     # 确认没有密钥/大文件
+git commit -m "..."                    # 建议用文件：git commit -F
+git push
+```
+
+**不要强推。** 上一个人推送时发现远程有 2 个不是自己提交的 commit，
+靠 rebase 合过去才没覆盖。遇到 `rejected / fetch first` 就：
+
+```powershell
+git rebase origin/main    # 或 git pull --rebase
+git push
+```
+
+## 提交前必须检查的
+
+```powershell
+$tracked = git ls-files
+# 这些绝不能出现
+$tracked | Select-String '\.jks$|keystore\.properties|local\.properties|\.onnx$|^reference/|^app/app/build/'
+```
+
+`.gitignore` 已覆盖 `*.jks` / `keystore.properties` / `local.properties` /
+`reference/` / `build/` / `node_modules/`。
+
+## 调 GitHub API（取 token，别硬编码）
+
+凭据在 Windows 凭据管理器里，用 `git credential fill` 取：
+
+```js
+import { execFileSync } from 'node:child_process';
+const out = execFileSync('C:/Program Files/Git/cmd/git.exe', ['credential', 'fill'], {
+  input: 'protocol=https\nhost=github.com\n\n', encoding: 'utf8',
+});
+const token = out.match(/^password=(.+)$/m)[1].trim();
+```
+
+> ⚠️ **发中文 JSON 必须用 Node 的 `fetch`，不要用 PowerShell 的 `Invoke-RestMethod`。**
+> 后者会把中文替换成 `?` 且不报错（仓库简介就被这么毁过一次）。
+> 现成工具：`server/tools/fix-repo-meta.mjs`、`server/tools/audit-encoding.mjs`。
+
+## 建发行版 + 传 APK
+
+APK 放 Release，**不要进仓库**（不占仓库体积，用户下载也不用登录）。
+
+```powershell
+# 1) 先编译
+cd D:\laya\app
+& "D:\dsh\aibendi\.tools\gradle-8.9\bin\gradle.bat" assembleDebug assembleRelease
+
+# 2) 生成校验和
+$dir = "D:\laya\app\app\build\outputs\apk\release"
+Get-ChildItem $dir -Filter *.apk | ForEach-Object {
+  "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+} | Out-File "$dir\SHA256SUMS.txt" -Encoding ascii
+```
+
+然后用 API 建 release 并上传（用 Node fetch，中文不会坏）：
+
+```
+POST https://api.github.com/repos/woaiys3/laya-decide/releases
+     { tag_name, target_commitish:"main", name, body, draft:false }
+  → 返回 id 和 upload_url
+
+POST https://uploads.github.com/repos/woaiys3/laya-decide/releases/{id}/assets?name=xxx.apk
+     --data-binary @文件      (PowerShell 用 Invoke-RestMethod -InFile)
+```
+
+已存在的 release 可以用 `POST .../releases/{id}/assets?name=` 补传附件。
+
+## ⚠️ 标签与发行版是硬绑定的
+
+删掉远程 tag 会让挂在它上面的 release **降级成"未打标签的草稿"**
+（页面变成 `releases/tag/untagged-xxxxx`）。**附件不会丢。**
+
+修法（PATCH 回去）：
+
+```
+PATCH https://api.github.com/repos/woaiys3/laya-decide/releases/{id}
+      { tag_name: "v1.0.0", draft: false }
+```
+
+所以顺序是：**记下 release id → 重写历史 → 重建 tag → PATCH 挂回去**，
+不要"删了重做"（那要重传几百 MB）。
+
+## 改了提交信息之后（重写历史）
+
+```powershell
+# 剥 BOM 只能用 perl，sed 不认 \xEF
+git filter-branch -f --msg-filter "perl -pe 's/^\xEF\xBB\xBF//'" -- --all
+
+# ★ 必须核对 tree hash —— 相同才证明文件内容零改动
+git log --format="%h %T %s"
+
+# 原状态留在 refs/original，确认无误后再删
+git for-each-ref refs/original
+git update-ref -d refs/original/refs/heads/main
+```
+
+⚠️ `filter-branch -- --all` 会**连你自己的备份分支一起重写**，
+所以别指望本地分支当备份，要靠 `refs/original/`。
+
+## 提交信息里别带 BOM
+
+```powershell
+# ❌ 会带 BOM，GitHub 上标题前多个乱码块
+$msg | Out-File -Encoding utf8 $tmp
+
+# ✅ 用这个
+[System.IO.File]::WriteAllText($tmp, $msg, (New-Object System.Text.UTF8Encoding($false)))
+git commit -F $tmp
+```
+
+---
+
+
+# 第十二节 · 被搁置的事（别主动捡起来）
 
 - **微调**：查过，这台机器跑不了（无 CUDA、可用内存 4GB、没有 Python 环境），
   官方 notebook 要 2×T4。用户最后说"算了吧"。
